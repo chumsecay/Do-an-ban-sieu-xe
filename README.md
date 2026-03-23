@@ -1,56 +1,56 @@
-# Do an ban sieu xe (FLCar)
+# Ð? án bán siêu xe (FLCar)
 
-Website showroom xe sang, xay dung bang PHP + MySQL.
-Du an ho tro ca 2 cach chay:
+Website showroom xe sang, xây d?ng b?ng PHP + MySQL.
+D? án h? tr? c? 2 cách ch?y:
 - XAMPP (Apache + MySQL local)
 - Docker Compose (PHP + MariaDB + phpMyAdmin)
 
-## 1) Chay bang XAMPP
+## 1) Ch?y b?ng XAMPP
 
-1. Dat source code vao:
+1. Ð?t source code vào:
    - `C:\xampp\htdocs\Do-an-ban-sieu-xe`
-2. Tao `.env`:
+2. T?o `.env`:
 ```powershell
 Copy-Item .env.xampp.example .env
 ```
-3. Mo XAMPP Control Panel va bat `Apache`, `MySQL`.
-4. Vao `http://localhost/phpmyadmin`, tao DB `flcar_db`.
+3. M? XAMPP Control Panel và b?t `Apache`, `MySQL`.
+4. Vào `http://localhost/phpmyadmin`, t?o DB `flcar_db`.
 5. Import schema: `database/schema.sql`.
-6. Truy cap:
+6. Truy c?p:
    - `http://localhost/Do-an-ban-sieu-xe/`
    - `http://localhost/Do-an-ban-sieu-xe/admin/`
 
-## 2) Chay bang Docker
+## 2) Ch?y b?ng Docker
 
-1. Tao `.env`:
+1. T?o `.env`:
 ```powershell
 Copy-Item .env.docker.example .env
 ```
-2. Chay:
+2. Ch?y:
 ```powershell
 docker compose up -d --build
 ```
 3. Import schema:
-   - Vao phpMyAdmin: `http://localhost:8081`
+   - Vào phpMyAdmin: `http://localhost:8081`
    - DB host: `db`
-   - User/pass theo `.env` (mac dinh `carserv` / `carserv123`)
-   - Import `database/schema.sql` vao DB `flcar_db`
-4. Truy cap:
+   - User/pass theo `.env` (m?c ð?nh `carserv` / `carserv123`)
+   - Import `database/schema.sql` vào DB `flcar_db`
+4. Truy c?p:
    - Website: `http://localhost:8080`
    - phpMyAdmin: `http://localhost:8081`
 
-Dung Docker:
+D?ng Docker:
 ```powershell
 docker compose down
 ```
 
-## 3) Luu y
+## 3) Lýu ?
 
-- Docker DB map cong mac dinh `3306` (`DB_HOST_PORT=3306`).
-- Neu dang bat MySQL cua XAMPP, co the bi trung cong 3306. Khi do:
-  - Hoac tat MySQL XAMPP khi chay Docker
-  - Hoac doi `DB_HOST_PORT` trong `.env` Docker sang cong khac (vi du `3307`)
+- Docker DB map c?ng m?c ð?nh `3306` (`DB_HOST_PORT=3306`).
+- N?u ðang b?t MySQL c?a XAMPP, có th? b? trùng c?ng 3306. Khi ðó:
+  - Ho?c t?t MySQL XAMPP khi ch?y Docker
+  - Ho?c ð?i `DB_HOST_PORT` trong `.env` Docker sang c?ng khác (ví d? `3307`)
 
-## 4) Kiem tra ket noi nhanh
+## 4) Ki?m tra k?t n?i nhanh
 
-Neu gap loi DB, mo `test_db.php` de kiem tra cau hinh `.env`.
+N?u g?p l?i DB, m? `test_db.php` ð? ki?m tra c?u h?nh `.env`.
