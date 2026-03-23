@@ -1,10 +1,12 @@
-ï»¿-- FLCar / carserv database skeleton
+-- FLCar database skeleton
 -- Target: MariaDB 11+ / MySQL 8+
+-- This script relies on the currently authenticated MySQL user.
+-- No CREATE USER / GRANT to a specific account is required.
 
-CREATE DATABASE IF NOT EXISTS carserv
+CREATE DATABASE IF NOT EXISTS flcar_db
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
-USE carserv;
+USE flcar_db;
 
 SET NAMES utf8mb4;
 
@@ -250,6 +252,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 -- Optional bootstrap values
 INSERT IGNORE INTO app_settings (setting_key, setting_value, description)
 VALUES
-('APP_NAME', 'FLCar', 'TÃªn website/app'),
-('CONTACT_EMAIL', 'info@flcar.vn', 'Email liÃªn há»‡ chÃ­nh'),
-('CONTACT_PHONE', '0900 000 000', 'Hotline liÃªn há»‡ chÃ­nh');
+('APP_NAME', 'FLCar', 'Tên website/app'),
+('CONTACT_EMAIL', 'info@flcar.vn', 'Email liên h? chính'),
+('CONTACT_PHONE', '0900 000 000', 'Hotline liên h? chính');
+
