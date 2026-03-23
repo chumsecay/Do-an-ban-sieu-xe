@@ -36,9 +36,21 @@ if (strpos($_SERVER['SCRIPT_FILENAME'] ?? '', DIRECTORY_SEPARATOR . 'admin' . DI
       </a>
     </li>
     <li>
+      <a href="<?php echo $adminBase; ?>brands.php" class="<?php echo $adminPage === 'brands' ? 'active' : ''; ?>">
+        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M19 21v-4"/><path d="M19 17a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v4"/><path d="M7 15V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v10"/></svg>
+        Quản lý hãng
+      </a>
+    </li>
+    <li>
       <a href="<?php echo $adminBase; ?>orders.php" class="<?php echo $adminPage === 'orders' ? 'active' : ''; ?>">
         <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
         Đơn hàng
+      </a>
+    </li>
+    <li>
+      <a href="<?php echo $adminBase; ?>order_details.php" class="<?php echo $adminPage === 'order_details' ? 'active' : ''; ?>">
+        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Chi tiết hóa đơn
       </a>
     </li>
 
@@ -47,6 +59,24 @@ if (strpos($_SERVER['SCRIPT_FILENAME'] ?? '', DIRECTORY_SEPARATOR . 'admin' . DI
       <a href="<?php echo $adminBase; ?>customers.php" class="<?php echo $adminPage === 'customers' ? 'active' : ''; ?>">
         <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         Khách hàng
+      </a>
+    </li>
+    <li>
+      <a href="<?php echo $adminBase; ?>employees.php" class="<?php echo $adminPage === 'employees' ? 'active' : ''; ?>">
+        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Nhân viên
+      </a>
+    </li>
+    <li>
+      <a href="<?php echo $adminBase; ?>warranties.php" class="<?php echo $adminPage === 'warranties' ? 'active' : ''; ?>">
+        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Bảo hành
+      </a>
+    </li>
+    <li>
+      <a href="<?php echo $adminBase; ?>reports.php" class="<?php echo $adminPage === 'reports' ? 'active' : ''; ?>">
+        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Báo cáo & Thống kê
       </a>
     </li>
     <li>

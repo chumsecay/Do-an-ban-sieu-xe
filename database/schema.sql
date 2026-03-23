@@ -256,3 +256,63 @@ VALUES
 ('CONTACT_EMAIL', 'info@flcar.vn', 'Email liên h? chính'),
 ('CONTACT_PHONE', '0900 000 000', 'Hotline liên h? chính');
 
+
+-- =========================
+-- 7) ORDER DETAILS (CHI TIET HOA DON)
+-- =========================
+CREATE TABLE IF NOT EXISTS order_details (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id BIGINT UNSIGNED NOT NULL,
+  car_id BIGINT UNSIGNED NOT NULL,
+  quantity INT UNSIGNED NOT NULL DEFAULT 1,
+  unit_price DECIMAL(15,2) NOT NULL,
+  discount_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  total_price DECIMAL(15,2) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_order_details_order (order_id),
+  KEY idx_order_details_car (car_id),
+  CONSTRAINT fk_order_details_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_order_details_car FOREIGN KEY (car_id) REFERENCES cars(id)
+) ENGINE=InnoDB;
+
+-- =========================
+-- 8) EMPLOYEES (NHAN VIEN)
+-- =========================
+CREATE TABLE IF NOT EXISTS employees (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(30) NOT NULL,
+  full_name VARCHAR(150) NOT NULL,
+  email VARCHAR(150) NOT NULL,
+  phone VARCHAR(30) NULL,
+  position VARCHAR(100) NULL,
+  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_employees_code (code),
+  UNIQUE KEY uq_employees_email (email)
+) ENGINE=InnoDB;
+
+-- =========================
+-- 9) WARRANTIES (BAO HANH)
+-- =========================
+CREATE TABLE IF NOT EXISTS warranties (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  warranty_code VARCHAR(50) NOT NULL,
+  order_id BIGINT UNSIGNED NULL,
+  car_id BIGINT UNSIGNED NOT NULL,
+  customer_id BIGINT UNSIGNED NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  terms TEXT NULL,
+  status ENUM('active','expired','void') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_warranties_code (warranty_code),
+  KEY idx_warranties_order (order_id),
+  KEY idx_warranties_car (car_id),
+  KEY idx_warranties_customer (customer_id),
+  KEY idx_warranties_dates (start_date, end_date),
+  CONSTRAINT fk_warranties_order FOREIGN KEY (order_id) REFERENCES orders(id),
+  CONSTRAINT fk_warranties_car FOREIGN KEY (car_id) REFERENCES cars(id),
+  CONSTRAINT fk_warranties_customer FOREIGN KEY (customer_id) REFERENCES customers(id)
+) ENGINE=InnoDB;

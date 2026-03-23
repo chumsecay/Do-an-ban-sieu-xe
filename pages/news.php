@@ -66,6 +66,20 @@ $newsItems = [
 <!-- No heavy reveal animations (no content-reveal classes) for maximum grid rendering performance -->
 <section class="py-5" style="background-color: #f8fafc; min-height: 60vh;">
   <div class="container py-4">
+  
+    <!-- Search Bar -->
+    <div class="row justify-content-center mb-5">
+      <div class="col-md-8 col-lg-6">
+        <form method="GET" action="news.php" class="d-flex gap-2 shadow-sm rounded-3 p-2 bg-white">
+          <input type="text" name="q" class="form-control border-0 shadow-none" placeholder="Tìm kiếm tin bài, sự kiện..." value="<?php echo htmlspecialchars($_GET['q'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" style="padding:10px 16px;">
+          <button type="submit" class="btn btn-primary px-4" style="border-radius:var(--radius-sm);font-weight:600;background:var(--gradient-primary);border:none">
+            <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            TÌM KIẾM
+          </button>
+        </form>
+      </div>
+    </div>
+
     <div class="row g-4">
       <?php foreach ($newsItems as $news): ?>
       <div class="col-lg-4 col-md-6 mb-2">
