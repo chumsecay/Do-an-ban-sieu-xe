@@ -2,6 +2,7 @@
 require_once __DIR__ . '/bootstrap/env.php';
 $currentPage = 'home';
 $appName = env('APP_NAME', 'FLCar');
+$metaDescription = env('APP_META_DESCRIPTION', 'FLCar - Showroom o to cao cap. Xe nhap khau chinh hang, gia tot nhat thi truong.');
 $heroTitle = env('APP_HERO_TITLE', 'Premium Cars Collection');
 $heroSubtitle = env('APP_HERO_SUBTITLE', 'Đẳng cấp - Chất lượng - Giá tốt nhất thị trường');
 ?>
@@ -11,7 +12,7 @@ $heroSubtitle = env('APP_HERO_SUBTITLE', 'Đẳng cấp - Chất lượng - Giá
 <meta charset="utf-8">
 <title><?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?> - Showroom Ô Tô Cao Cấp</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="FLCar - Showroom ô tô cao cấp. Xe nhập khẩu chính hãng, giá tốt nhất thị trường.">
+<meta name="description" content="<?php echo htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8'); ?>">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="css/flcar-common.css?v=3" rel="stylesheet">
 
