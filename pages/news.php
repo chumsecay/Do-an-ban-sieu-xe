@@ -1,0 +1,98 @@
+<?php
+require_once __DIR__ . '/../bootstrap/env.php';
+$currentPage = 'news';
+$appName = env('APP_NAME', 'FLCar');
+
+// Prepare array for DB extraction later
+$newsItems = [
+    [
+        'title' => 'Trải nghiệm lái thử siêu xe Porsche 911 GT3 RS thế hệ mới',
+        'image' => '../img/porsche.jpg',
+        'date' => '24/10/2026',
+        'excerpt' => 'Sự kiện trải nghiệm đặc biệt dành cho khách hàng VIP với dòng xe thể thao đua đường phố mới nhất từ Porsche.',
+        'category' => 'Sự kiện'
+    ],
+    [
+        'title' => 'Mercedes ra mắt các dòng xe AMG SUVs Hybrid 2026',
+        'image' => '../img/mer amg suvs.jpg',
+        'date' => '15/09/2026',
+        'excerpt' => 'Công nghệ động cơ lai điện hiệu suất cao chính thức được trang bị trên các mẫu SUV hạng sang của hãng xe Đức.',
+        'category' => 'Bản tin xe'
+    ],
+    [
+        'title' => 'Chương trình khuyến mãi & bảo dưỡng mùa lễ hội',
+        'image' => '../img/hero.jpg',
+        'date' => '01/09/2026',
+        'excerpt' => 'Tặng gói bảo dưỡng 3 năm cho khách hàng mua xe trong tháng 9. Ưu đãi phủ ceramic cao cấp giảm 50%.',
+        'category' => 'Khuyến mãi'
+    ],
+    [
+        'title' => 'Đánh giá chi tiết BMW X5 thế hệ 2024: Mượt mà và Đẳng cấp',
+        'image' => '../img/bmwx5.jpg',
+        'date' => '22/08/2026',
+        'excerpt' => 'BMW X5 2024 mang đến những thay đổi nhỏ nhưng mang tính cách mạng trong trải nghiệm lái và nội thất.',
+        'category' => 'Đánh giá'
+    ],
+    [
+        'title' => 'Siêu xe mui trần nào đáng mua nhất năm 2026?',
+        'image' => '../img/mer amg 63 .jpg',
+        'date' => '11/08/2026',
+        'excerpt' => 'Cùng dạo qua những mẫu Roadsters tuyệt đẹp đang làm mưa làm gió trong giới thượng lưu.',
+        'category' => 'Tư vấn'
+    ]
+];
+?>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tin Tức & Sự Kiện - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="../css/flcar-common.css?v=6" rel="stylesheet">
+<link rel="icon" href="../img/logo.png" type="image/png">
+</head>
+<body>
+<?php include __DIR__ . '/../partials/header.php'; ?>
+
+<section class="page-banner">
+  <div class="container text-center">
+    <p class="section-label" style="justify-content:center; color:rgba(255,255,255,.9)">Tạp Chí Điện Tử</p>
+    <h1 class="display-3 fw-bold mb-3">Tin Tức & Sự Kiện</h1>
+    <p class="lead opacity-75 mx-auto" style="max-width: 600px;">Cập nhật những thông tin thị trường xe hơi, các bài đánh giá chi tiết và ưu đãi đặc biệt mới nhất từ FLCar.</p>
+  </div>
+</section>
+
+<!-- No heavy reveal animations (no content-reveal classes) for maximum grid rendering performance -->
+<section class="py-5" style="background-color: #f8fafc; min-height: 60vh;">
+  <div class="container py-4">
+    <div class="row g-4">
+      <?php foreach ($newsItems as $news): ?>
+      <div class="col-lg-4 col-md-6 mb-2">
+        <a href="#" class="text-decoration-none">
+          <div class="card news-card h-100 position-relative">
+            <span class="news-category"><?php echo $news['category']; ?></span>
+            <img src="<?php echo $news['image']; ?>" class="card-img-top news-img" alt="<?php echo htmlspecialchars($news['title']); ?>">
+            <div class="news-card-body d-flex flex-column h-100">
+              <span class="news-date mb-2 d-inline-block">🗓️ <?php echo $news['date']; ?></span>
+              <h5 class="news-title"><?php echo $news['title']; ?></h5>
+              <p class="text-muted mb-0" style="font-size: 0.95rem; line-height: 1.6;"><?php echo $news['excerpt']; ?></p>
+              <div class="mt-auto pt-4">
+                <span class="text-primary fw-bold" style="font-size: 0.95rem;">Đọc chi tiết &rarr;</span>
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<?php include __DIR__ . '/../partials/footer.php'; ?>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="../js/navbar-shrink.js"></script>
+<!-- Intentionally omitting content-reveal.js to keep this page lightweight and fast-rendering -->
+</body>
+</html>
