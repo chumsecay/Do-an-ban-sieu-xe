@@ -172,14 +172,7 @@ try {
                     </td>
                     <td class="text-end pe-4">
                       <!-- Nút Sửa -->
-                      <button type="button" class="btn-action edit" onclick="openEditModal(<?php echo htmlspecialchars(json_encode([
-                        'id' => $c['id'],
-                        'name' => $c['name'],
-                        'year' => $c['model_year'],
-                        'price' => $c['price'],
-                        'brand_id' => $c['brand_id'],
-                        'status' => $c['status']
-                      ])); ?>)">Sửa Cấu Hình</button>
+                      <a href="car-edit.php?id=<?php echo $c['id']; ?>" class="btn-action edit">Sửa Cấu Hình</a>
 
                       <!-- Nút Xóa -->
                       <form method="POST" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa xe này vĩnh viễn?');">
