@@ -1,10 +1,38 @@
 <?php
 require_once __DIR__ . '/bootstrap/env.php';
+require_once __DIR__ . '/config/database.php';
 $currentPage = 'home';
 $appName = env('APP_NAME', 'FLCar');
 $metaDescription = env('APP_META_DESCRIPTION', 'FLCar - Showroom o to cao cap. Xe nhap khau chinh hang, gia tot nhat thi truong.');
 $heroTitle = env('APP_HERO_TITLE', 'Premium Cars Collection');
 $heroSubtitle = env('APP_HERO_SUBTITLE', 'Đẳng cấp - Chất lượng - Giá tốt nhất thị trường');
+
+// Lấy xe nổi bật từ DB
+$pdo = getDBConnection();
+try {
+    $featuredCars = $pdo->query("
+        SELECT c.*, b.name AS brand_name, cat.name AS category_name,
+               (SELECT image_url FROM car_images ci WHERE ci.car_id = c.id AND ci.is_cover = 1 ORDER BY ci.id ASC LIMIT 1) AS cover_image
+        FROM cars c
+        LEFT JOIN brands b ON c.brand_id = b.id
+        LEFT JOIN car_categories cat ON c.category_id = cat.id
+        WHERE c.is_featured = 1
+        ORDER BY c.id DESC LIMIT 6
+    ")->fetchAll();
+    // Nếu chưa có xe nổi bật -> lấy 6 xe mới nhất
+    if (empty($featuredCars)) {
+        $featuredCars = $pdo->query("
+            SELECT c.*, b.name AS brand_name, cat.name AS category_name,
+                   (SELECT image_url FROM car_images ci WHERE ci.car_id = c.id AND ci.is_cover = 1 ORDER BY ci.id ASC LIMIT 1) AS cover_image
+            FROM cars c
+            LEFT JOIN brands b ON c.brand_id = b.id
+            LEFT JOIN car_categories cat ON c.category_id = cat.id
+            ORDER BY c.id DESC LIMIT 6
+        ")->fetchAll();
+    }
+} catch (Exception $e) {
+    $featuredCars = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -81,92 +109,32 @@ $heroSubtitle = env('APP_HERO_SUBTITLE', 'Đẳng cấp - Chất lượng - Giá
       <h2 class="section-title">Xe Nổi Bật</h2>
       <p class="section-subtitle">Khám phá những mẫu xe sang trọng nhất tại showroom của chúng tôi</p>
     </div>
+    <?php if (!empty($featuredCars)): ?>
     <div class="row g-4">
+      <?php foreach ($featuredCars as $fc):
+        $fcImg = !empty($fc['cover_image']) ? htmlspecialchars($fc['cover_image']) : 'img/bmwx5.jpg';
+      ?>
       <div class="col-lg-4 col-md-6">
         <div class="card shadow-sm car-card position-relative">
-          <span class="badge-type">SUV</span>
-          <img src="img/bmwx5.jpg" class="card-img-top" alt="BMW X5">
+          <span class="badge-type"><?php echo htmlspecialchars($fc['category_name'] ?? 'Xe'); ?></span>
+          <img src="<?php echo $fcImg; ?>" class="card-img-top" alt="<?php echo htmlspecialchars($fc['name']); ?>">
           <div class="card-body">
-            <h5 class="fw-bold">BMW X5 2024</h5>
-            <p class="text-muted mb-2">SUV hạng sang, nội thất cao cấp</p>
+            <h5 class="fw-bold"><?php echo htmlspecialchars($fc['name']); ?></h5>
+            <p class="text-muted mb-2"><?php echo htmlspecialchars($fc['brand_name'] ?? ''); ?> · <?php echo $fc['model_year']; ?></p>
             <div class="d-flex justify-content-between align-items-center">
-              <span class="price-tag">$65,000</span>
-              <a href="chitietxe.html" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
+              <span class="price-tag">$<?php echo number_format($fc['price']); ?></span>
+              <a href="pages/car-detail.php?id=<?php echo $fc['id']; ?>" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
             </div>
           </div>
         </div>
       </div>
-      <div class="col-lg-4 col-md-6">
-        <div class="card shadow-sm car-card position-relative">
-          <span class="badge-type">Sedan</span>
-          <img src="img/mer amg suvs.jpg" class="card-img-top" alt="Mercedes AMG SUVs">
-          <div class="card-body">
-            <h5 class="fw-bold">Mercedes AMG SUVs</h5>
-            <p class="text-muted mb-2">Sedan sang trọng, động cơ mạnh mẽ</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="price-tag">$55,000</span>
-              <a href="chitietxe.html" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-4 col-md-6">
-        <div class="card shadow-sm car-card position-relative">
-          <span class="badge-type">Luxury</span>
-          <img src="img/rollroyce phamtom viii.jpg" class="card-img-top" alt="Rolls Royce Phantom">
-          <div class="card-body">
-            <h5 class="fw-bold">Rolls Royce Phantom</h5>
-            <p class="text-muted mb-2">Siêu sang, nội thất thủ công tinh xảo</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="price-tag">$320,000</span>
-              <a href="chitietxe.html" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-4 col-md-6">
-        <div class="card shadow-sm car-card position-relative">
-          <span class="badge-type">Sport</span>
-          <img src="img/ford mustang.jpg" class="card-img-top" alt="Ford Mustang">
-          <div class="card-body">
-            <h5 class="fw-bold">Ford Mustang GT</h5>
-            <p class="text-muted mb-2">Coupe thể thao, động cơ V8 phấn khích</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="price-tag">$58,000</span>
-              <a href="chitietxe.html" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-4 col-md-6">
-        <div class="card shadow-sm car-card position-relative">
-          <span class="badge-type">Roadster</span>
-          <img src="img/Mazda MX-5.jpg" class="card-img-top" alt="Mazda MX-5">
-          <div class="card-body">
-            <h5 class="fw-bold">Mazda MX-5</h5>
-            <p class="text-muted mb-2">Roadster gọn nhẹ, cảm giác lái linh hoạt</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="price-tag">$35,000</span>
-              <a href="chitietxe.html" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-4 col-md-6">
-        <div class="card shadow-sm car-card position-relative">
-          <span class="badge-type">Hypercar</span>
-          <img src="img/lamborghini veneno roadster carbon.jpg" class="card-img-top" alt="Lamborghini Veneno">
-          <div class="card-body">
-            <h5 class="fw-bold">Lamborghini Veneno</h5>
-            <p class="text-muted mb-2">Hypercar hiếm, thiết kế khí động học</p>
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="price-tag">$3,500,000</span>
-              <a href="chitietxe.html" class="btn btn-dark btn-sm px-3">Xem Chi Tiết</a>
-            </div>
-          </div>
-        </div>
-      </div>
+      <?php endforeach; ?>
     </div>
+    <?php else: ?>
+    <div class="text-center py-5">
+      <p class="text-muted">Showroom đang cập nhật bộ sưu tập. Vui lòng quay lại sau!</p>
+    </div>
+    <?php endif; ?>
     <div class="text-center mt-5">
       <a href="pages/showroom.php" class="btn btn-primary btn-lg px-5">Xem Tất Cả Xe →</a>
     </div>
