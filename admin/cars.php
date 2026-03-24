@@ -1,169 +1,332 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../config/database.php';
+
 $adminPage = 'cars';
-$pageTitle = 'Quản lý xe';
-$pageSubtitle = 'Thêm, sửa, xoá xe trong kho';
 $appName = env('APP_NAME', 'FLCar');
+
+$pdo = getDBConnection();
+$msg = $_GET['msg'] ?? '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    
+    if ($action === 'delete') {
+        $id = $_POST['car_id'] ?? 0;
+        if ($id) {
+            $stmt = $pdo->prepare("DELETE FROM cars WHERE id = ?");
+            $stmt->execute([$id]);
+        }
+        header("Location: cars.php?msg=deleted");
+        exit;
+    }
+    
+    if ($action === 'add') {
+        $brand_id = $_POST['brand_id'] ?? 1;
+        $category_id = $_POST['category_id'] ?? 1;
+        
+        $checkBrand = $pdo->prepare("SELECT id FROM brands WHERE id = ?");
+        $checkBrand->execute([$brand_id]);
+        if (!$checkBrand->fetch()) {
+            $pdo->query("INSERT INTO brands (id, name, slug) VALUES (1, 'Khác', 'khac')");
+            $brand_id = 1;
+        }
+
+        $checkCat = $pdo->prepare("SELECT id FROM car_categories WHERE id = ?");
+        $checkCat->execute([$category_id]);
+        if (!$checkCat->fetch()) {
+            $pdo->query("INSERT INTO car_categories (id, name, slug) VALUES (1, 'Khác', 'khac')");
+            $category_id = 1;
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO cars (code, name, slug, brand_id, category_id, model_year, price, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            'XE-' . strtoupper(substr(md5(uniqid()), 0, 5)), 
+            $_POST['name'] ?? 'Tên xe mới',
+            'xe-moi-' . time(),
+            $brand_id,
+            $category_id,
+            $_POST['year'] ?? date('Y'),
+            $_POST['price'] ?? 0,
+            $_POST['status'] ?? 'available'
+        ]);
+        header("Location: cars.php?msg=added");
+        exit;
+    }
+
+    if ($action === 'edit') {
+        $id = $_POST['car_id'] ?? 0;
+        if ($id) {
+            $stmt = $pdo->prepare("UPDATE cars SET name = ?, model_year = ?, price = ?, brand_id = ?, status = ? WHERE id = ?");
+            $stmt->execute([
+                $_POST['name'] ?? '',
+                $_POST['year'] ?? date('Y'),
+                $_POST['price'] ?? 0,
+                $_POST['brand_id'] ?? 1,
+                $_POST['status'] ?? 'available',
+                $id
+            ]);
+            header("Location: cars.php?msg=edited");
+            exit;
+        }
+    }
+}
+
+try {
+    $cars = $pdo->query("
+        SELECT c.*, b.name as brand_name, cat.name as category_name,
+               (SELECT image_url FROM car_images ci WHERE ci.car_id = c.id AND ci.is_cover = 1 ORDER BY ci.id ASC LIMIT 1) as cover_image
+        FROM cars c 
+        LEFT JOIN brands b ON c.brand_id = b.id 
+        LEFT JOIN car_categories cat ON c.category_id = cat.id 
+        ORDER BY c.id DESC
+    ")->fetchAll();
+    $brands = $pdo->query("SELECT * FROM brands")->fetchAll();
+    $categories = $pdo->query("SELECT * FROM car_categories")->fetchAll();
+} catch (Exception $e) {
+    $cars = []; $brands = []; $categories = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Quản Lý Xe - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="../css/admin.css" rel="stylesheet">
-
+<title>Kho Xe - <?php echo htmlspecialchars($appName); ?> Admin</title>
 <link rel="icon" href="../img/logo.png" type="image/png">
+<!-- Gắn lại chính xác font, bootstrap, và CSS gốc -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="../css/admin.css" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif !important; background-color: #f8fafc; }
+  .table > :not(caption) > * > * { padding: 16px 12px; border-bottom-color: #f1f5f9; vertical-align: middle; }
+  .btn-action { background: none; border: none; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; transition: 0.2s; margin-left: 4px; }
+  .btn-action.edit { color: #0284c7; background: #e0f2fe; }
+  .btn-action.edit:hover { background: #bae6fd; }
+  .btn-action.delete { color: #ef4444; background: #fee2e2; }
+  .btn-action.delete:hover { background: #fecaca; }
+</style>
 </head>
-<body class="admin-body">
-<?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+<body>
 
-<div class="admin-main">
-  <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
+<div class="admin-wrapper" id="adminWrapper">
+  <?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+  
+  <div class="admin-main">
+    <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
 
-  <main class="admin-content">
+    <main class="admin-content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 fw-bold text-dark mb-0">Quản Lý Kho Siêu Xe</h2>
+        <button class="btn btn-primary fw-bold px-4 rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#addCarModal">Thêm Xe Mới</button>
+      </div>
 
-    <!-- Quick Stats -->
-    <div class="stat-cards">
-      <div class="stat-card">
-        <div class="stat-info"><h3>24</h3><p>Tổng xe</p></div>
-        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M17 17m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M5 17H3v-6l2-5h9l4 5h1a2 2 0 0 1 2 2v4h-2"/><path d="M9 17h6"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>15</h3><p>Còn hàng</p></div>
-        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>6</h3><p>Đặt cọc</p></div>
-        <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>3</h3><p>Đã bán</p></div>
-        <div class="stat-icon cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9 12l2 2 4-4"/></svg></div>
-      </div>
-    </div>
+      <?php if($msg === 'deleted'): ?>
+        <div class="alert alert-danger border-0 shadow-sm" style="border-radius: 12px;">Đã xóa xe khỏi kho dữ liệu thành công!</div>
+      <?php elseif($msg === 'added'): ?>
+        <div class="alert alert-success border-0 shadow-sm" style="border-radius: 12px;">Đã nhập siêu xe mới thành công!</div>
+      <?php elseif($msg === 'edited'): ?>
+        <div class="alert alert-info border-0 shadow-sm" style="border-radius: 12px;">Đã cập nhật thông tin siêu xe thành công!</div>
+      <?php endif; ?>
 
-    <!-- Filter bar -->
-    <div class="panel" style="margin-bottom:0;border-radius:var(--radius) var(--radius) 0 0">
-      <div class="panel-header" style="border-bottom:none;flex-wrap:wrap;gap:12px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <select class="filter-select" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;font-size:.82rem;background:#f8fafc;color:#334155">
-            <option>Tất cả hãng</option><option>BMW</option><option>Mercedes</option><option>Ford</option><option>Lamborghini</option><option>Ferrari</option><option>Rolls Royce</option><option>Mazda</option><option>MG</option>
-          </select>
-          <select class="filter-select" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;font-size:.82rem;background:#f8fafc;color:#334155">
-            <option>Tất cả trạng thái</option><option>Còn hàng</option><option>Đặt cọc</option><option>Đã bán</option>
-          </select>
-          <select class="filter-select" style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;font-size:.82rem;background:#f8fafc;color:#334155">
-            <option>Sắp xếp: Mới nhất</option><option>Giá: Thấp → Cao</option><option>Giá: Cao → Thấp</option><option>Tên A → Z</option>
-          </select>
+      <div class="card border-0 shadow-sm" style="border-radius: 16px;">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase text-secondary bg-light" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                  <th class="ps-4">Mã Xe</th>
+                  <th>Hình Ảnh & Tên Xe</th>
+                  <th>Thương Hiệu</th>
+                  <th>Giá Bán</th>
+                  <th>Trạng Thái</th>
+                  <th class="text-end pe-4">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if(count($cars) === 0): ?>
+                  <tr><td colspan="6" class="text-center py-5 text-muted">Chưa có siêu xe nào trong kho.</td></tr>
+                <?php else: ?>
+                  <?php foreach($cars as $c): 
+                    $imgSrc = !empty($c['cover_image']) ? htmlspecialchars($c['cover_image']) : '../img/bmwx5.jpg'; 
+                  ?>
+                  <tr>
+                    <td class="ps-4 fw-bold text-secondary"><?php echo htmlspecialchars($c['code']); ?></td>
+                    <td>
+                      <div class="d-flex align-items-center gap-3">
+                        <img src="<?php echo $imgSrc; ?>" alt="car" style="width: 56px; height: 42px; object-fit: cover; border-radius: 8px;">
+                        <span class="fw-bold text-dark"><?php echo htmlspecialchars($c['name']); ?></span>
+                      </div>
+                    </td>
+                    <td class="text-secondary fw-medium"><?php echo htmlspecialchars($c['brand_name'] ?? 'N/A'); ?></td>
+                    <td class="fw-bold text-dark fs-6">$<?php echo number_format($c['price']); ?></td>
+                    <td>
+                      <?php if($c['status'] === 'sold'): ?>
+                        <span class="badge bg-light text-secondary px-3 py-2 rounded-pill">Đã Bán</span>
+                      <?php elseif($c['status'] === 'reserved'): ?>
+                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill bg-opacity-25">Đặt Cọc</span>
+                      <?php else: ?>
+                        <span class="badge bg-success text-success px-3 py-2 rounded-pill bg-opacity-25">Sẵn Hàng</span>
+                      <?php endif; ?>
+                    </td>
+                    <td class="text-end pe-4">
+                      <!-- Nút Sửa -->
+                      <button type="button" class="btn-action edit" onclick="openEditModal(<?php echo htmlspecialchars(json_encode([
+                        'id' => $c['id'],
+                        'name' => $c['name'],
+                        'year' => $c['model_year'],
+                        'price' => $c['price'],
+                        'brand_id' => $c['brand_id'],
+                        'status' => $c['status']
+                      ])); ?>)">Sửa Cấu Hình</button>
+
+                      <!-- Nút Xóa -->
+                      <form method="POST" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa xe này vĩnh viễn?');">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="car_id" value="<?php echo $c['id']; ?>">
+                        <button type="submit" class="btn-action delete">Xóa</button>
+                      </form>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <button class="btn-add">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Thêm xe mới
-        </button>
       </div>
-    </div>
-
-    <!-- Full car table -->
-    <div class="panel" style="border-radius:0 0 var(--radius) var(--radius)">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th style="width:30px"><input type="checkbox"></th>
-            <th>Xe</th>
-            <th>Hãng</th>
-            <th>Loại</th>
-            <th>Năm</th>
-            <th>Giá</th>
-            <th>Trạng thái</th>
-            <th>Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/bmwx5.jpg" alt="BMW X5"><div><strong>BMW X5 2024</strong><small>Mã: XE-001</small></div></div></td>
-            <td>BMW</td><td>SUV</td><td>2024</td>
-            <td><strong>$65,000</strong></td>
-            <td><span class="badge-status badge-available">Còn hàng</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/mer amg suvs.jpg" alt="Mercedes"><div><strong>Mercedes AMG SUVs</strong><small>Mã: XE-002</small></div></div></td>
-            <td>Mercedes</td><td>Sedan</td><td>2024</td>
-            <td><strong>$55,000</strong></td>
-            <td><span class="badge-status badge-reserved">Đặt cọc</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/rollroyce phamtom viii.jpg" alt="Rolls Royce"><div><strong>Rolls Royce Phantom</strong><small>Mã: XE-003</small></div></div></td>
-            <td>Rolls Royce</td><td>Luxury</td><td>2023</td>
-            <td><strong>$320,000</strong></td>
-            <td><span class="badge-status badge-available">Còn hàng</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/ford mustang.jpg" alt="Ford Mustang"><div><strong>Ford Mustang GT</strong><small>Mã: XE-004</small></div></div></td>
-            <td>Ford</td><td>Sport</td><td>2024</td>
-            <td><strong>$58,000</strong></td>
-            <td><span class="badge-status badge-sold">Đã bán</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/Mazda MX-5.jpg" alt="Mazda MX-5"><div><strong>Mazda MX-5</strong><small>Mã: XE-005</small></div></div></td>
-            <td>Mazda</td><td>Roadster</td><td>2024</td>
-            <td><strong>$35,000</strong></td>
-            <td><span class="badge-status badge-available">Còn hàng</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/lamborghini veneno roadster carbon.jpg" alt="Lamborghini"><div><strong>Lamborghini Veneno</strong><small>Mã: XE-006</small></div></div></td>
-            <td>Lamborghini</td><td>Hypercar</td><td>2023</td>
-            <td><strong>$3,500,000</strong></td>
-            <td><span class="badge-status badge-available">Còn hàng</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/ferrari 488 pista spider.jpg" alt="Ferrari"><div><strong>Ferrari 488 Pista Spider</strong><small>Mã: XE-007</small></div></div></td>
-            <td>Ferrari</td><td>Supercar</td><td>2023</td>
-            <td><strong>$410,000</strong></td>
-            <td><span class="badge-status badge-reserved">Đặt cọc</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/mg cyberster.jpg" alt="MG Cyberster"><div><strong>MG Cyberster</strong><small>Mã: XE-008</small></div></div></td>
-            <td>MG</td><td>Electric</td><td>2025</td>
-            <td><strong>$48,000</strong></td>
-            <td><span class="badge-status badge-available">Còn hàng</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/bmw 430i converible.jpg" alt="BMW 430i"><div><strong>BMW 430i Convertible</strong><small>Mã: XE-009</small></div></div></td>
-            <td>BMW</td><td>Convertible</td><td>2024</td>
-            <td><strong>$62,000</strong></td>
-            <td><span class="badge-status badge-reserved">Đặt cọc</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Xem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-  </main>
+    </main>
+  </div>
 </div>
 
+<!-- Modal Thêm Xe Nhanh -->
+<div class="modal fade" id="addCarModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="border-radius: 16px;">
+      <form method="POST">
+        <input type="hidden" name="action" value="add">
+        <div class="modal-header border-0 pb-0 pt-4 px-4">
+          <h5 class="modal-title fw-bold text-dark">Nhập Kho Siêu Xe Mới</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body px-4">
+          <div class="mb-3">
+            <label class="form-label text-secondary small fw-bold">Tên Model Xe</label>
+            <input type="text" name="name" class="form-control bg-light border-0" required>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Năm sản xuất</label>
+              <input type="number" name="year" class="form-control bg-light border-0" value="<?php echo date('Y'); ?>" required>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Giá niêm yết ($)</label>
+              <input type="number" name="price" class="form-control bg-light border-0" value="0" required>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Thương hiệu</label>
+              <select name="brand_id" class="form-select bg-light border-0">
+                <?php foreach($brands as $b): ?>
+                  <option value="<?php echo $b['id']; ?>"><?php echo htmlspecialchars($b['name']); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Trạng thái xe</label>
+              <select name="status" class="form-select bg-light border-0">
+                <option value="available">Sẵn Hàng</option>
+                <option value="reserved">Khách Đặt Cọc</option>
+                <option value="sold">Đã Bán</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0 pb-4 px-4">
+          <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary fw-bold px-4">Lưu Thông Tin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Sửa Xe -->
+<div class="modal fade" id="editCarModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="border-radius: 16px;">
+      <form method="POST">
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="car_id" id="edit_car_id" value="">
+        <div class="modal-header border-0 pb-0 pt-4 px-4">
+          <h5 class="modal-title fw-bold text-dark">Cập Nhật Thông Tin Xe</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body px-4">
+          <div class="mb-3">
+            <label class="form-label text-secondary small fw-bold">Tên Model Xe</label>
+            <input type="text" name="name" id="edit_name" class="form-control bg-light border-0" required>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Năm sản xuất</label>
+              <input type="number" name="year" id="edit_year" class="form-control bg-light border-0" required>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Giá niêm yết ($)</label>
+              <input type="number" name="price" id="edit_price" class="form-control bg-light border-0" required>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Thương hiệu</label>
+              <select name="brand_id" id="edit_brand_id" class="form-select bg-light border-0">
+                <?php foreach($brands as $b): ?>
+                  <option value="<?php echo $b['id']; ?>"><?php echo htmlspecialchars($b['name']); ?></option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Trạng thái xe</label>
+              <select name="status" id="edit_status" class="form-select bg-light border-0">
+                <option value="available">Sẵn Hàng</option>
+                <option value="reserved">Khách Đặt Cọc</option>
+                <option value="sold">Đã Bán</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0 pb-4 px-4">
+          <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary fw-bold px-4">Lưu Chỉnh Sửa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function toggleSidebar() {
-  document.getElementById('adminSidebar').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('show');
-}
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.getElementById('sidebarToggle');
+    const wrapper = document.getElementById('adminWrapper');
+    if(toggle) toggle.addEventListener('click', () => wrapper.classList.toggle('sidebar-collapsed'));
+  });
+
+  // Hiển thị và gán dữ liệu vào Modal Sửa
+  function openEditModal(car) {
+    document.getElementById('edit_car_id').value = car.id;
+    document.getElementById('edit_name').value = car.name;
+    document.getElementById('edit_year').value = car.year;
+    document.getElementById('edit_price').value = car.price;
+    document.getElementById('edit_brand_id').value = car.brand_id;
+    document.getElementById('edit_status').value = car.status;
+    
+    var editModal = new bootstrap.Modal(document.getElementById('editCarModal'));
+    editModal.show();
+  }
 </script>
 </body>
 </html>

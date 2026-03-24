@@ -1,57 +1,151 @@
 <?php
+declare(strict_types=1);
 require_once __DIR__ . '/config/database.php';
 
-// CSS cơ bản để hiển thị cho đẹp mắt dù là trang phụ
-echo '<style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); text-align: center; max-width: 500px; }
-    .success { color: #10b981; }
-    .error { color: #ef4444; }
-    .icon { font-size: 48px; margin-bottom: 20px; }
-    h1 { margin-top: 0; font-size: 24px; color: #1e293b; }
-    p { color: #64748b; line-height: 1.6; }
-    .env-info { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left; font-family: monospace; font-size: 14px; color: #334155; }
-</style>';
+/**
+ * Connect without requiring an existing database.
+ * Useful for running schema.sql that contains CREATE DATABASE / USE.
+ */
+function getServerConnection(): PDO
+{
+    $host = env('DB_HOST', '127.0.0.1');
+    $port = env('DB_PORT', '3306');
+    $user = env('DB_USERNAME', 'root');
+    $pass = env('DB_PASSWORD', '');
+    $charset = 'utf8mb4';
 
-echo '<body><div class="card" id="status-card">';
-echo '<div class="icon">⏳</div>';
-echo '<h1>Đang kiểm tra kết nối Database...</h1>';
-echo '<p>Vui lòng chờ trong giây lát. Nếu cấu hình sai, hệ thống sẽ hiện lỗi rõ ràng (tối đa khoảng 5 giây).</p>';
-echo '</div>';
-
-if (function_exists('ob_flush')) {
-    @ob_flush();
+    $dsn = "mysql:host=$host;port=$port;charset=$charset;connect_timeout=5";
+    return new PDO($dsn, $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_TIMEOUT => 5,
+    ]);
 }
-flush();
+
+/**
+ * Execute SQL file by splitting on semicolon line endings.
+ * Works with this project's schema.sql style (no custom DELIMITER blocks).
+ */
+function runSqlFile(PDO $pdo, string $sqlFile): array
+{
+    if (!is_file($sqlFile)) {
+        throw new RuntimeException('Khong tim thay file schema: ' . $sqlFile);
+    }
+
+    $lines = file($sqlFile, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        throw new RuntimeException('Khong doc duoc file schema.sql');
+    }
+
+    $buffer = '';
+    $executed = 0;
+
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        if ($trimmed === '' || str_starts_with($trimmed, '--')) {
+            continue;
+        }
+
+        $buffer .= $line . "\n";
+        if (str_ends_with(rtrim($line), ';')) {
+            $statement = trim($buffer);
+            $buffer = '';
+            if ($statement !== '') {
+                $pdo->exec($statement);
+                $executed++;
+            }
+        }
+    }
+
+    if (trim($buffer) !== '') {
+        $pdo->exec($buffer);
+        $executed++;
+    }
+
+    return ['executed' => $executed];
+}
+
+$action = $_POST['action'] ?? 'test';
+$resultClass = 'success';
+$resultTitle = 'Ket noi Database thanh cong';
+$resultBody = '';
+$extraInfo = '';
 
 try {
-    // Thử gọi hàm kết nối
-    $pdo = getDBConnection();
-    
-    // Thu thập thêm thông tin Version của MySQL nếu kết nối thành công
-    $version = $pdo->query('select version()')->fetchColumn();
-    
-    $resultHtml  = '<div class="icon success">✅</div>';
-    $resultHtml .= '<h1>Kết nối Database Thành Công!</h1>';
-    $resultHtml .= '<p>Hệ thống đã nhận diện chính xác cấu hình từ file <b>.env</b> và kết nối trơn tru với cơ sở dữ liệu.</p>';
-    $resultHtml .= '<div class="env-info">';
-    $resultHtml .= '<strong>Host:</strong> ' . htmlspecialchars(env('DB_HOST')) . '<br>';
-    $resultHtml .= '<strong>Database:</strong> ' . htmlspecialchars(env('DB_DATABASE')) . '<br>';
-    $resultHtml .= '<strong>MySQL Version:</strong> ' . htmlspecialchars($version);
-    $resultHtml .= '</div>';
+    if ($action === 'apply_schema') {
+        set_time_limit(120);
+        $pdoServer = getServerConnection();
+        $schemaPath = __DIR__ . '/database/schema.sql';
+        $summary = runSqlFile($pdoServer, $schemaPath);
 
-} catch (\Exception $e) {
-    $resultHtml  = '<div class="icon error">❌</div>';
-    $resultHtml .= '<h1>Kết nối Database Thất Bại!</h1>';
-    $resultHtml .= '<p>Không thể kết nối đến cơ sở dữ liệu. Vui lòng kiểm tra lại thông tin Host, Username, Password và Tên DB trong file <b>.env</b>.</p>';
-    $resultHtml .= '<div class="env-info" style="color: #ef4444; background: #fef2f2;">';
-    $resultHtml .= '<strong>Lỗi chi tiết:</strong><br>';
-    $resultHtml .= htmlspecialchars($e->getMessage());
-    $resultHtml .= '</div>';
+        $resultTitle = 'Cap nhat DB thanh cong';
+        $resultBody = 'Da chay schema.sql thanh cong. Ban co the tiep tuc test chuc nang tren web.';
+        $extraInfo = 'So cau lenh da thuc thi: ' . (int)$summary['executed'];
+    } else {
+        $pdo = getDBConnection();
+        $version = $pdo->query('SELECT VERSION()')->fetchColumn();
+        $resultBody = 'He thong da ket noi duoc toi database theo cau hinh trong file .env.';
+        $extraInfo = 'MySQL Version: ' . htmlspecialchars((string)$version, ENT_QUOTES, 'UTF-8');
+    }
+} catch (Throwable $e) {
+    $resultClass = 'error';
+    $resultTitle = 'Xu ly that bai';
+    $resultBody = 'Khong the ket noi hoac cap nhat DB. Vui long kiem tra lai cau hinh .env va quyen tai khoan DB.';
+    $extraInfo = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
 }
-
-echo '<script>';
-echo 'document.getElementById("status-card").innerHTML = ' . json_encode($resultHtml, JSON_UNESCAPED_UNICODE) . ';';
-echo '</script>';
-echo '</body>';
 ?>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DB Utility</title>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; background: #f8fafc; margin: 0; padding: 24px; color: #0f172a; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 10px 30px rgba(15, 23, 42, .08); padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    .muted { margin: 0 0 20px; color: #475569; }
+    .result { border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+    .result.success { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .result.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .meta { background: #f1f5f9; border-radius: 10px; padding: 12px; font-family: Consolas, monospace; font-size: 13px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    button { border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-secondary { background: #334155; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>DB Utility</h1>
+      <p class="muted">Kiem tra ket noi va cap nhat CSDL tu <code>database/schema.sql</code> ngay tren trang nay.</p>
+
+      <div class="result <?php echo $resultClass; ?>">
+        <strong><?php echo htmlspecialchars($resultTitle, ENT_QUOTES, 'UTF-8'); ?></strong>
+        <div><?php echo htmlspecialchars($resultBody, ENT_QUOTES, 'UTF-8'); ?></div>
+      </div>
+
+      <div class="meta">
+        <div><strong>Host:</strong> <?php echo htmlspecialchars((string)env('DB_HOST', ''), ENT_QUOTES, 'UTF-8'); ?></div>
+        <div><strong>Port:</strong> <?php echo htmlspecialchars((string)env('DB_PORT', ''), ENT_QUOTES, 'UTF-8'); ?></div>
+        <div><strong>Database:</strong> <?php echo htmlspecialchars((string)env('DB_DATABASE', ''), ENT_QUOTES, 'UTF-8'); ?></div>
+        <div><strong>Thong tin:</strong> <?php echo $extraInfo; ?></div>
+      </div>
+
+      <div class="actions">
+        <form method="post">
+          <input type="hidden" name="action" value="test">
+          <button class="btn-secondary" type="submit">Kiem tra ket noi</button>
+        </form>
+        <form method="post" onsubmit="return confirm('Chay lai database/schema.sql?');">
+          <input type="hidden" name="action" value="apply_schema">
+          <button class="btn-primary" type="submit">Cap nhat DB tu schema.sql</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

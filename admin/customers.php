@@ -1,161 +1,194 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../config/database.php';
+
 $adminPage = 'customers';
-$pageTitle = 'Khách hàng';
-$pageSubtitle = 'Quản lý thông tin khách hàng';
 $appName = env('APP_NAME', 'FLCar');
+
+$pdo = getDBConnection();
+$msg = $_GET['msg'] ?? '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    if ($action === 'delete') {
+        $id = $_POST['customer_id'] ?? 0;
+        if ($id) {
+            $stmt = $pdo->prepare("DELETE FROM customers WHERE id = ?");
+            $stmt->execute([$id]);
+        }
+        header("Location: customers.php?msg=deleted");
+        exit;
+    }
+    
+    if ($action === 'add') {
+        $stmt = $pdo->prepare("INSERT INTO customers (full_name, email, phone, tier) VALUES (?, ?, ?, ?)");
+        $stmt->execute([
+            $_POST['full_name'] ?? '',
+            $_POST['email'] ?? '',
+            $_POST['phone'] ?? '',
+            $_POST['tier'] ?? 'new'
+        ]);
+        header("Location: customers.php?msg=added");
+        exit;
+    }
+}
+
+try {
+    $customers = $pdo->query("SELECT * FROM customers ORDER BY id DESC")->fetchAll();
+} catch (Exception $e) {
+    $customers = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Khách Hàng - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hồ Sơ Khách Hàng - <?php echo htmlspecialchars($appName); ?> Admin</title>
+<link rel="icon" href="../img/logo.png" type="image/png">
+<!-- Gắn lại chính xác font, bootstrap, và CSS gốc -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="../css/admin.css" rel="stylesheet">
 <style>
-  .customer-avatar {
-    width: 40px; height: 40px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: .85rem; color: #fff; flex-shrink: 0;
-  }
-  .customer-cell { display: flex; align-items: center; gap: 12px; }
-  .customer-cell strong { font-weight: 600; }
-  .customer-cell small { display: block; color: #64748b; font-size: .75rem; }
-  .tag { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: .72rem; font-weight: 600; }
-  .tag-vip { background: #fef3c7; color: #92400e; }
-  .tag-new { background: #dbeafe; color: #1e40af; }
-  .tag-regular { background: #f1f5f9; color: #475569; }
+  body { font-family: 'Inter', sans-serif !important; background-color: #f8fafc; }
+  .table > :not(caption) > * > * { padding: 16px 12px; border-bottom-color: #f1f5f9; vertical-align: middle; }
+  .btn-action { background: none; border: none; padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; transition: 0.2s; }
+  .btn-action.delete { color: #ef4444; background: #fee2e2; }
+  .btn-action.delete:hover { background: #fecaca; }
+  .avatar-placeholder { width: 44px; height: 44px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; }
 </style>
-
-<link rel="icon" href="../img/logo.png" type="image/png">
 </head>
-<body class="admin-body">
-<?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+<body>
 
-<div class="admin-main">
-  <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
+<div class="admin-wrapper" id="adminWrapper">
+  <?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+  
+  <div class="admin-main">
+    <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
 
-  <main class="admin-content">
-
-    <!-- Stat Cards -->
-    <div class="stat-cards">
-      <div class="stat-card">
-        <div class="stat-info"><h3>89</h3><p>Tổng khách hàng</p><span class="stat-change up">↑ 5% tháng này</span></div>
-        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>12</h3><p>VIP</p></div>
-        <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>23</h3><p>Khách mới (tháng)</p></div>
-        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>₫2.1B</h3><p>Tổng chi tiêu</p></div>
-        <div class="stat-icon cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div>
-      </div>
-    </div>
-
-    <!-- Filter -->
-    <div class="panel" style="margin-bottom:0;border-radius:var(--radius) var(--radius) 0 0">
-      <div class="panel-header" style="border-bottom:none;flex-wrap:wrap;gap:12px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <select style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;font-size:.82rem;background:#f8fafc;color:#334155">
-            <option>Tất cả phân loại</option><option>VIP</option><option>Khách mới</option><option>Thường</option>
-          </select>
-          <select style="border:1px solid #e2e8f0;border-radius:8px;padding:8px 14px;font-size:.82rem;background:#f8fafc;color:#334155">
-            <option>Sắp xếp: Mới nhất</option><option>Tên A → Z</option><option>Chi tiêu: Cao → Thấp</option>
-          </select>
+    <main class="admin-content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="h4 fw-bold text-dark mb-1">Quản Lý Người Dùng & Khách Hàng</h2>
+          <p class="text-secondary mb-0 small">Hồ sơ khách hàng đã giao dịch và cần tư vấn</p>
         </div>
-        <button class="btn-add">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Thêm khách hàng
-        </button>
+        <button class="btn btn-primary fw-bold px-4 rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#addCustomerModal">Ghi Nhận Khách Mới</button>
       </div>
-    </div>
 
-    <!-- Customers Table -->
-    <div class="panel" style="border-radius:0 0 var(--radius) var(--radius)">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th style="width:30px"><input type="checkbox"></th>
-            <th>Khách hàng</th>
-            <th>Điện thoại</th>
-            <th>Xe đã mua</th>
-            <th>Tổng chi tiêu</th>
-            <th>Phân loại</th>
-            <th>Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="customer-cell"><div class="customer-avatar" style="background:linear-gradient(135deg,#3b82f6,#2563eb)">NA</div><div><strong>Nguyễn Văn An</strong><small>an.nguyen@email.com</small></div></div></td>
-            <td>0901 234 567</td>
-            <td>3</td>
-            <td><strong>$188,000</strong></td>
-            <td><span class="tag tag-vip">⭐ VIP</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Chi tiết"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="customer-cell"><div class="customer-avatar" style="background:linear-gradient(135deg,#ec4899,#db2777)">TB</div><div><strong>Trần Thị Bình</strong><small>binh.tran@email.com</small></div></div></td>
-            <td>0912 345 678</td>
-            <td>1</td>
-            <td><strong>$55,000</strong></td>
-            <td><span class="tag tag-regular">Thường</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Chi tiết"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="customer-cell"><div class="customer-avatar" style="background:linear-gradient(135deg,#22c55e,#16a34a)">LD</div><div><strong>Lê Hoàng Dũng</strong><small>dung.le@email.com</small></div></div></td>
-            <td>0923 456 789</td>
-            <td>2</td>
-            <td><strong>$123,000</strong></td>
-            <td><span class="tag tag-vip">⭐ VIP</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Chi tiết"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="customer-cell"><div class="customer-avatar" style="background:linear-gradient(135deg,#f59e0b,#d97706)">MC</div><div><strong>Phạm Minh Châu</strong><small>chau.pham@email.com</small></div></div></td>
-            <td>0934 567 890</td>
-            <td>1</td>
-            <td><strong>$410,000</strong></td>
-            <td><span class="tag tag-vip">⭐ VIP</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Chi tiết"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="customer-cell"><div class="customer-avatar" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">DT</div><div><strong>Hoàng Đức Thịnh</strong><small>thinh.hoang@email.com</small></div></div></td>
-            <td>0945 678 901</td>
-            <td>0</td>
-            <td><strong>$0</strong></td>
-            <td><span class="tag tag-new">🆕 Mới</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Chi tiết"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><div class="customer-cell"><div class="customer-avatar" style="background:linear-gradient(135deg,#06b6d4,#0891b2)">VH</div><div><strong>Võ Thanh Hải</strong><small>hai.vo@email.com</small></div></div></td>
-            <td>0956 789 012</td>
-            <td>1</td>
-            <td><strong>$320,000</strong></td>
-            <td><span class="tag tag-vip">⭐ VIP</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Chi tiết"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <?php if($msg === 'deleted'): ?>
+        <div class="alert alert-danger border-0 shadow-sm" style="border-radius: 12px;">Đã xóa hồ sơ khách hàng.</div>
+      <?php elseif($msg === 'added'): ?>
+        <div class="alert alert-success border-0 shadow-sm" style="border-radius: 12px;">Thêm hồ sơ khách hàng thành công.</div>
+      <?php endif; ?>
 
-  </main>
+      <div class="card border-0 shadow-sm" style="border-radius: 16px;">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase text-secondary bg-light" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                  <th class="ps-4">Khách Hàng</th>
+                  <th>Số Điện Thoại</th>
+                  <th>Email Liên Hệ</th>
+                  <th>Hạng Thẻ</th>
+                  <th>Ngày Đăng Ký</th>
+                  <th class="text-end pe-4">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if(count($customers) === 0): ?>
+                  <tr><td colspan="6" class="text-center py-5 text-muted">Chưa có dữ liệu khách hàng.</td></tr>
+                <?php else: ?>
+                  <?php foreach($customers as $c): ?>
+                  <tr>
+                    <td class="ps-4">
+                      <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-placeholder"><?php echo mb_strtoupper(mb_substr($c['full_name'], 0, 1, 'UTF-8'), 'UTF-8'); ?></div>
+                        <span class="fw-bold text-dark"><?php echo htmlspecialchars($c['full_name']); ?></span>
+                      </div>
+                    </td>
+                    <td class="text-secondary fw-medium"><?php echo htmlspecialchars($c['phone'] ?: '---'); ?></td>
+                    <td class="text-secondary fw-medium"><?php echo htmlspecialchars($c['email'] ?: '---'); ?></td>
+                    <td>
+                      <?php if($c['tier'] === 'vip'): ?>
+                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill bg-opacity-25 border border-warning">Khách VIP</span>
+                      <?php elseif($c['tier'] === 'regular'): ?>
+                        <span class="badge bg-success text-success px-3 py-2 rounded-pill bg-opacity-25">Thân thiết</span>
+                      <?php else: ?>
+                        <span class="badge bg-info text-info px-3 py-2 rounded-pill bg-opacity-10">Khách Mới</span>
+                      <?php endif; ?>
+                    </td>
+                    <td class="text-secondary small fw-medium"><?php echo date('d/m/Y', strtotime($c['created_at'])); ?></td>
+                    <td class="text-end pe-4">
+                      <form method="POST" class="d-inline" onsubmit="return confirm('Xóa bỏ hồ sơ của khách hàng này?');">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="customer_id" value="<?php echo $c['id']; ?>">
+                        <button type="submit" class="btn-action delete">Xóa Hồ Sơ</button>
+                      </form>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
 
+<!-- Modal Thêm Khách Hàng -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow" style="border-radius: 16px;">
+      <form method="POST">
+        <input type="hidden" name="action" value="add">
+        <div class="modal-header border-0 pb-0 pt-4 px-4">
+          <h5 class="modal-title fw-bold text-dark">Lưu Khách Hàng Mới</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body px-4">
+          <div class="mb-3">
+            <label class="form-label text-secondary small fw-bold">Họ và tên</label>
+            <input type="text" name="full_name" class="form-control bg-light border-0" required>
+          </div>
+          <div class="row">
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Số điện thoại</label>
+              <input type="text" name="phone" class="form-control bg-light border-0">
+            </div>
+            <div class="col-6 mb-3">
+              <label class="form-label text-secondary small fw-bold">Xếp hạng</label>
+              <select name="tier" class="form-select bg-light border-0">
+                <option value="new">Khách Mới</option>
+                <option value="regular">Thành viên Thân thiết</option>
+                <option value="vip">Đối tác / VIP</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label text-secondary small fw-bold">Email (không bắt buộc)</label>
+            <input type="email" name="email" class="form-control bg-light border-0">
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0 pb-4 px-4">
+          <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary fw-bold px-4">Ghi Nhận</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function toggleSidebar() {
-  document.getElementById('adminSidebar').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('show');
-}
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.getElementById('sidebarToggle');
+    const wrapper = document.getElementById('adminWrapper');
+    if(toggle) toggle.addEventListener('click', () => wrapper.classList.toggle('sidebar-collapsed'));
+  });
 </script>
 </body>
 </html>

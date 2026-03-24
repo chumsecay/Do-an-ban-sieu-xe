@@ -1,134 +1,156 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../config/database.php';
+
 $adminPage = 'dashboard';
-$pageTitle = 'Dashboard';
-$pageSubtitle = 'Tổng quan hoạt động showroom';
 $appName = env('APP_NAME', 'FLCar');
+
+$pdo = getDBConnection();
+try {
+    $totalCars = (int) $pdo->query("SELECT COUNT(*) FROM cars")->fetchColumn();
+    $totalSold = (int) $pdo->query("SELECT COUNT(*) FROM cars WHERE status = 'sold'")->fetchColumn();
+    $totalCustomers = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
+    $totalRevenue = (float) $pdo->query("SELECT SUM(price) FROM cars WHERE status = 'sold'")->fetchColumn();
+    $recentActivity = $pdo->query("SELECT c.*, b.name as brand_name FROM cars c LEFT JOIN brands b ON c.brand_id = b.id ORDER BY c.id DESC LIMIT 5")->fetchAll();
+} catch (Exception $e) {
+    $totalCars = 0; $totalSold = 0; $totalCustomers = 0; $totalRevenue = 0; $recentActivity = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Quản Trị - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="../css/admin.css" rel="stylesheet">
-
+<title>Tổng Quan - <?php echo htmlspecialchars($appName); ?> Admin</title>
 <link rel="icon" href="../img/logo.png" type="image/png">
+<!-- Gắn lại chính xác font, bootstrap, và CSS gốc -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="../css/admin.css" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif !important; background-color: #f8fafc; }
+  .stat-card { background: #fff; padding: 24px; border-radius: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+  .stat-label { color: #64748b; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: block; }
+  .stat-value { font-size: 2rem; font-weight: 800; color: #0f172a; line-height: 1; }
+  .stat-icon { width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+  .table > :not(caption) > * > * { padding: 16px 12px; border-bottom-color: #f1f5f9; }
+</style>
 </head>
-<body class="admin-body">
+<body>
 
-<?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+<div class="admin-wrapper" id="adminWrapper">
+  <?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+  
+  <div class="admin-main">
+    <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
 
-<div class="admin-main">
-  <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
+    <main class="admin-content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 fw-bold text-dark mb-0">Dashboard Toàn Cảnh</h2>
+      </div>
 
-  <main class="admin-content">
-
-    <!-- Stat Cards -->
-    <div class="stat-cards">
-      <div class="stat-card">
-        <div class="stat-info">
-          <h3>24</h3>
-          <p>Xe trong kho</p>
-          <span class="stat-change up">↑ 12% tháng này</span>
+      <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-sm-6">
+          <div class="stat-card">
+            <div>
+              <span class="stat-label">Tổng Lượng Xe</span>
+              <div class="stat-value"><?php echo number_format($totalCars); ?></div>
+            </div>
+            <div class="stat-icon" style="background:#e0f2fe; color:#0284c7;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+            </div>
+          </div>
         </div>
-        <div class="stat-icon blue">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M17 17m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M5 17H3v-6l2-5h9l4 5h1a2 2 0 0 1 2 2v4h-2"/><path d="M9 17h6"/></svg>
+        
+        <div class="col-xl-3 col-sm-6">
+          <div class="stat-card">
+            <div>
+              <span class="stat-label">Xe Đã Bán</span>
+              <div class="stat-value"><?php echo number_format($totalSold); ?></div>
+            </div>
+            <div class="stat-icon" style="background:#fef3c7; color:#d97706;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-3 col-sm-6">
+          <div class="stat-card">
+            <div>
+              <span class="stat-label">Doanh thu dự tính</span>
+              <div class="stat-value">$<?php echo number_format($totalRevenue); ?></div>
+            </div>
+            <div class="stat-icon" style="background:#ede9fe; color:#7c3aed;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-xl-3 col-sm-6">
+          <div class="stat-card">
+            <div>
+              <span class="stat-label">Khách hàng VIP</span>
+              <div class="stat-value"><?php echo number_format($totalCustomers); ?></div>
+            </div>
+            <div class="stat-icon" style="background:#fce7f3; color:#be185d;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-info">
-          <h3>156</h3>
-          <p>Xe đã bán</p>
-          <span class="stat-change up">↑ 8% tháng này</span>
-        </div>
-        <div class="stat-icon green">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info">
-          <h3>₫12.5B</h3>
-          <p>Doanh thu</p>
-          <span class="stat-change up">↑ 23% tháng này</span>
-        </div>
-        <div class="stat-icon amber">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info">
-          <h3>89</h3>
-          <p>Khách hàng</p>
-          <span class="stat-change down">↓ 3% tháng này</span>
-        </div>
-        <div class="stat-icon cyan">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-        </div>
-      </div>
-    </div>
 
-    <!-- Car Inventory Table -->
-    <div class="panel">
-      <div class="panel-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <h2>Xe trong kho</h2>
-          <span class="badge-count">24 xe</span>
+      <div class="card border-0 shadow-sm" style="border-radius: 16px;">
+        <div class="card-body p-4">
+          <h5 class="fw-bold mb-4 text-dark">Danh Sách Xe Nhập Khẩu Gần Đây</h5>
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase text-secondary" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+                  <th>Mã Xe</th>
+                  <th>Tên Siêu Xe</th>
+                  <th>Thương Hiệu</th>
+                  <th>Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if(count($recentActivity) === 0): ?>
+                  <tr><td colspan="4" class="text-center py-4 text-muted">Chưa có kết quả</td></tr>
+                <?php else: ?>
+                  <?php foreach($recentActivity as $r): ?>
+                  <tr>
+                    <td class="fw-bold text-secondary"><?php echo htmlspecialchars($r['code']); ?></td>
+                    <td class="fw-bold text-dark"><?php echo htmlspecialchars($r['name']); ?></td>
+                    <td class="text-secondary fw-medium"><?php echo htmlspecialchars($r['brand_name'] ?? 'N/A'); ?></td>
+                    <td>
+                      <?php if($r['status'] === 'sold'): ?>
+                        <span class="badge bg-light text-secondary px-3 py-2 rounded-pill">Đã Bán</span>
+                      <?php elseif($r['status'] === 'reserved'): ?>
+                        <span class="badge bg-warning text-dark px-3 py-2 rounded-pill bg-opacity-25">Đặt Cọc</span>
+                      <?php else: ?>
+                        <span class="badge bg-success text-success px-3 py-2 rounded-pill bg-opacity-25">Sẵn Hàng</span>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <a href="cars.php" class="btn-add">Xem tất cả →</a>
       </div>
-      <table class="admin-table">
-        <thead><tr><th>Xe</th><th>Hãng</th><th>Giá</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/bmwx5.jpg" alt="BMW X5"><div><strong>BMW X5 2024</strong><small>SUV · Tự động</small></div></div></td>
-            <td>BMW</td><td><strong>$65,000</strong></td>
-            <td><span class="badge-status badge-available">Còn hàng</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/mer amg suvs.jpg" alt="Mercedes"><div><strong>Mercedes AMG SUVs</strong><small>Sedan · Hybrid</small></div></div></td>
-            <td>Mercedes</td><td><strong>$55,000</strong></td>
-            <td><span class="badge-status badge-reserved">Đặt cọc</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-          <tr>
-            <td><div class="car-name-cell"><img class="car-thumb" src="../img/ford mustang.jpg" alt="Ford Mustang"><div><strong>Ford Mustang GT</strong><small>Sport · V8</small></div></div></td>
-            <td>Ford</td><td><strong>$58,000</strong></td>
-            <td><span class="badge-status badge-sold">Đã bán</span></td>
-            <td><div class="action-btns"><button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button></div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
 
-    <!-- Recent Orders -->
-    <div class="panel">
-      <div class="panel-header">
-        <div style="display:flex;align-items:center;gap:10px">
-          <h2>Đơn hàng gần đây</h2>
-          <span class="badge-count">5 đơn</span>
-        </div>
-        <a href="orders.php" class="btn-add">Xem tất cả →</a>
-      </div>
-      <table class="admin-table">
-        <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th>Xe</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
-        <tbody>
-          <tr><td><strong>#DH-001</strong></td><td>Nguyễn Văn An</td><td>BMW X5 2024</td><td>18/03/2026</td><td><span class="badge-status badge-confirmed">Đã xác nhận</span></td></tr>
-          <tr><td><strong>#DH-002</strong></td><td>Trần Thị Bình</td><td>Mercedes AMG SUVs</td><td>17/03/2026</td><td><span class="badge-status badge-pending">Chờ duyệt</span></td></tr>
-          <tr><td><strong>#DH-003</strong></td><td>Lê Hoàng Dũng</td><td>Ford Mustang GT</td><td>15/03/2026</td><td><span class="badge-status badge-confirmed">Đã xác nhận</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-
-  </main>
+    </main>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function toggleSidebar() {
-  document.getElementById('adminSidebar').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('show');
-}
+  // Simple sidebar toggle logic
+  document.addEventListener('DOMContentLoaded', () => {
+    const toggle = document.getElementById('sidebarToggle');
+    const wrapper = document.getElementById('adminWrapper');
+    if(toggle) toggle.addEventListener('click', () => wrapper.classList.toggle('sidebar-collapsed'));
+  });
 </script>
 </body>
 </html>
