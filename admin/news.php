@@ -15,16 +15,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create') {
         $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower($_POST['title'] ?? 'bai-viet'));
         $slug .= '-' . time();
-        $stmt = $pdo->prepare("INSERT INTO news_posts (title, slug, excerpt, content, cover_image_url, is_published, published_at) VALUES (?,?,?,?,?,?,?)");
-        $published = isset($_POST['is_published']) ? 1 : 0;
+        $status = isset($_POST['is_published']) ? 'published' : 'draft';
+        $stmt = $pdo->prepare("INSERT INTO news_posts (title, slug, excerpt, content, featured_image, status, published_at) VALUES (?,?,?,?,?,?,?)");
         $stmt->execute([
             $_POST['title']   ?? '',
             $slug,
             $_POST['excerpt'] ?? '',
             $_POST['content'] ?? '',
             $_POST['cover']   ?? '',
-            $published,
-            $published ? date('Y-m-d H:i:s') : null
+            $status,
+            $status === 'published' ? date('Y-m-d H:i:s') : null
         ]);
         header('Location: news.php?msg=created');
         exit;
@@ -33,13 +33,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update') {
         $id = (int) ($_POST['post_id'] ?? 0);
         if ($id) {
-            $stmt = $pdo->prepare("UPDATE news_posts SET title=?, excerpt=?, content=?, cover_image_url=?, is_published=? WHERE id=?");
+            $status = isset($_POST['is_published']) ? 'published' : 'draft';
+            $stmt = $pdo->prepare("UPDATE news_posts SET title=?, excerpt=?, content=?, featured_image=?, status=? WHERE id=?");
             $stmt->execute([
                 $_POST['title']   ?? '',
                 $_POST['excerpt'] ?? '',
                 $_POST['content'] ?? '',
                 $_POST['cover']   ?? '',
-                isset($_POST['is_published']) ? 1 : 0,
+                $status,
                 $id
             ]);
         }
@@ -130,16 +131,16 @@ if ($editId > 0) {
             <div class="col-md-8">
               <label class="form-label small fw-bold text-secondary">URL Ảnh Bìa</label>
               <input type="text" name="cover" id="coverInput" class="form-control bg-light border-0"
-                     value="<?php echo htmlspecialchars($editPost['cover_image_url'] ?? ''); ?>"
+                     value="<?php echo htmlspecialchars($editPost['featured_image'] ?? ''); ?>"
                      placeholder="https://... hoặc /img/..." oninput="previewCover(this.value)">
               <img id="coverPreview" class="cover-preview" src="" alt="Preview"
-                   style="<?php echo !empty($editPost['cover_image_url']) ? 'display:block;' : 'display:none;'; ?>"
-                   <?php if (!empty($editPost['cover_image_url'])): ?>src="<?php echo htmlspecialchars($editPost['cover_image_url']); ?>"<?php endif; ?>>
+                   style="<?php echo !empty($editPost['featured_image']) ? 'display:block;' : 'display:none;'; ?>"
+                   <?php if (!empty($editPost['featured_image'])): ?>src="<?php echo htmlspecialchars($editPost['featured_image']); ?>"<?php endif; ?>>
             </div>
             <div class="col-md-4 d-flex align-items-end">
               <div class="form-check form-switch mb-2 ms-2">
                 <input class="form-check-input" type="checkbox" name="is_published" id="pubToggle"
-                       <?php echo (!$editPost || $editPost['is_published']) ? 'checked' : ''; ?>>
+                       <?php echo (!$editPost || $editPost['status'] === 'published') ? 'checked' : ''; ?>>
                 <label class="form-check-label fw-semibold" for="pubToggle">Đăng tải ngay</label>
               </div>
             </div>
@@ -198,7 +199,7 @@ if ($editId > 0) {
                       <?php echo htmlspecialchars(mb_substr($p['excerpt'] ?? '', 0, 80)); ?>…
                     </td>
                     <td>
-                      <?php if ($p['is_published']): ?>
+                      <?php if ($p['status'] === 'published'): ?>
                         <span class="badge bg-success text-success bg-opacity-25 px-3 py-2 rounded-pill fw-semibold">Đã Đăng</span>
                       <?php else: ?>
                         <span class="badge bg-warning text-warning bg-opacity-25 px-3 py-2 rounded-pill fw-semibold">Nháp</span>
