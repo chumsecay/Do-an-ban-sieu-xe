@@ -19,7 +19,7 @@ services:
       - "${DB_HOST_PORT:-3306}:3306"
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
-      MARIADB_DATABASE: ${DB_DATABASE:-carserv}
+      MARIADB_DATABASE: ${DB_DATABASE:-flcar_db}
       MARIADB_USER: ${DB_USERNAME:-carserv}
       MARIADB_PASSWORD: ${DB_PASSWORD:-carserv123}
     volumes:
