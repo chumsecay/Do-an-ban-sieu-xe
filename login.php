@@ -113,10 +113,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$submittedUsername]);
                 $admin = $stmt->fetch();
 
-                if ($admin && (string)$admin['password_hash'] === $password) {
+                $storedPassword = (string)($admin['password_hash'] ?? '');
+                $passwordMatched = false;
+                $upgradeToHash = false;
+
+                if ($admin && $storedPassword !== '') {
+                    if (password_verify($password, $storedPassword)) {
+                        $passwordMatched = true;
+                    } elseif ((password_get_info($storedPassword)['algo'] ?? 0) === 0 && hash_equals($storedPassword, $password)) {
+                        // Legacy plaintext rows are accepted once and upgraded to a hash.
+                        $passwordMatched = true;
+                        $upgradeToHash = true;
+                    }
+                }
+
+                if ($passwordMatched) {
                     if ((int)$admin['is_active'] !== 1) {
                         $error = 'Tai khoan admin dang bi khoa.';
                     } else {
+                        if ($upgradeToHash || password_needs_rehash($storedPassword, PASSWORD_DEFAULT)) {
+                            try {
+                                $rehash = $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?');
+                                $rehash->execute([password_hash($password, PASSWORD_DEFAULT), (int)$admin['id']]);
+                            } catch (Throwable $ignored) {
+                            }
+                        }
+
                         loginAsAdmin($admin);
                         try {
                             $update = $pdo->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?');

@@ -1,48 +1,34 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
-require_once __DIR__ . '/../bootstrap/auth.php';
-ensureSessionStarted();
+require_once __DIR__ . '/../config/database.php';
 $currentPage = 'news';
 $appName = env('APP_NAME', 'FLCar');
 
-// Prepare array for DB extraction later
-$newsItems = [
-    [
-        'title' => 'Trải nghiệm lái thử siêu xe Porsche 911 GT3 RS thế hệ mới',
-        'image' => '../img/porsche.jpg',
-        'date' => '24/10/2026',
-        'excerpt' => 'Sự kiện trải nghiệm đặc biệt dành cho khách hàng VIP với dòng xe thể thao đua đường phố mới nhất từ Porsche.',
-        'category' => 'Sự kiện'
-    ],
-    [
-        'title' => 'Mercedes ra mắt các dòng xe AMG SUVs Hybrid 2026',
-        'image' => '../img/mer amg suvs.jpg',
-        'date' => '15/09/2026',
-        'excerpt' => 'Công nghệ động cơ lai điện hiệu suất cao chính thức được trang bị trên các mẫu SUV hạng sang của hãng xe Đức.',
-        'category' => 'Bản tin xe'
-    ],
-    [
-        'title' => 'Chương trình khuyến mãi & bảo dưỡng mùa lễ hội',
-        'image' => '../img/hero.jpg',
-        'date' => '01/09/2026',
-        'excerpt' => 'Tặng gói bảo dưỡng 3 năm cho khách hàng mua xe trong tháng 9. Ưu đãi phủ ceramic cao cấp giảm 50%.',
-        'category' => 'Khuyến mãi'
-    ],
-    [
-        'title' => 'Đánh giá chi tiết BMW X5 thế hệ 2024: Mượt mà và Đẳng cấp',
-        'image' => '../img/bmwx5.jpg',
-        'date' => '22/08/2026',
-        'excerpt' => 'BMW X5 2024 mang đến những thay đổi nhỏ nhưng mang tính cách mạng trong trải nghiệm lái và nội thất.',
-        'category' => 'Đánh giá'
-    ],
-    [
-        'title' => 'Siêu xe mui trần nào đáng mua nhất năm 2026?',
-        'image' => '../img/mer amg 63 .jpg',
-        'date' => '11/08/2026',
-        'excerpt' => 'Cùng dạo qua những mẫu Roadsters tuyệt đẹp đang làm mưa làm gió trong giới thượng lưu.',
-        'category' => 'Tư vấn'
-    ]
-];
+$q = trim($_GET['q'] ?? '');
+$newsItems = [];
+
+try {
+    $pdo = getDBConnection();
+    $sql = "
+        SELECT np.id, np.title, np.slug, np.excerpt, np.featured_image, np.published_at, nc.name AS category_name
+        FROM news_posts np
+        LEFT JOIN news_categories nc ON nc.id = np.category_id
+        WHERE np.status = 'published' AND np.published_at IS NOT NULL AND np.published_at <= NOW()
+    ";
+    $params = [];
+
+    if ($q !== '') {
+        $sql .= " AND (np.title LIKE :q OR np.excerpt LIKE :q OR np.content LIKE :q)";
+        $params[':q'] = '%' . $q . '%';
+    }
+
+    $sql .= " ORDER BY np.published_at DESC, np.id DESC LIMIT 30";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $newsItems = $stmt->fetchAll();
+} catch (Throwable $e) {
+    $newsItems = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -65,15 +51,12 @@ $newsItems = [
   </div>
 </section>
 
-<!-- No heavy reveal animations (no content-reveal classes) for maximum grid rendering performance -->
 <section class="py-5" style="background-color: #f8fafc; min-height: 60vh;">
   <div class="container py-4">
-  
-    <!-- Search Bar -->
     <div class="row justify-content-center mb-5">
       <div class="col-md-8 col-lg-6">
         <form method="GET" action="news.php" class="d-flex gap-2 shadow-sm rounded-3 p-2 bg-white">
-          <input type="text" name="q" class="form-control border-0 shadow-none" placeholder="Tìm kiếm tin bài, sự kiện..." value="<?php echo htmlspecialchars($_GET['q'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" style="padding:10px 16px;">
+          <input type="text" name="q" class="form-control border-0 shadow-none" placeholder="Tìm kiếm tin bài, sự kiện..." value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>" style="padding:10px 16px;">
           <button type="submit" class="btn btn-primary px-4" style="border-radius:var(--radius-sm);font-weight:600;background:var(--gradient-primary);border:none">
             <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             TÌM KIẾM
@@ -83,24 +66,30 @@ $newsItems = [
     </div>
 
     <div class="row g-4">
-      <?php foreach ($newsItems as $news): ?>
-      <div class="col-lg-4 col-md-6 mb-2">
-        <a href="#" class="text-decoration-none">
-          <div class="card news-card h-100 position-relative">
-            <span class="news-category"><?php echo $news['category']; ?></span>
-            <img src="<?php echo $news['image']; ?>" class="card-img-top news-img" alt="<?php echo htmlspecialchars($news['title']); ?>">
-            <div class="news-card-body d-flex flex-column h-100">
-              <span class="news-date mb-2 d-inline-block">🗓️ <?php echo $news['date']; ?></span>
-              <h5 class="news-title"><?php echo $news['title']; ?></h5>
-              <p class="text-muted mb-0" style="font-size: 0.95rem; line-height: 1.6;"><?php echo $news['excerpt']; ?></p>
-              <div class="mt-auto pt-4">
-                <span class="text-primary fw-bold" style="font-size: 0.95rem;">Đọc chi tiết &rarr;</span>
+      <?php if (empty($newsItems)): ?>
+        <div class="col-12">
+          <div class="alert alert-light border text-center py-4">Chưa có bài viết phù hợp. Vui lòng thử từ khóa khác hoặc quay lại sau.</div>
+        </div>
+      <?php else: ?>
+        <?php foreach ($newsItems as $news): ?>
+        <div class="col-lg-4 col-md-6 mb-2">
+          <a href="#" class="text-decoration-none">
+            <div class="card news-card h-100 position-relative">
+              <span class="news-category"><?php echo htmlspecialchars($news['category_name'] ?: 'Tin tức', ENT_QUOTES, 'UTF-8'); ?></span>
+              <img src="<?php echo htmlspecialchars(($news['featured_image'] ?: '../img/hero.jpg'), ENT_QUOTES, 'UTF-8'); ?>" class="card-img-top news-img" alt="<?php echo htmlspecialchars($news['title'], ENT_QUOTES, 'UTF-8'); ?>">
+              <div class="news-card-body d-flex flex-column h-100">
+                <span class="news-date mb-2 d-inline-block">🗓️ <?php echo !empty($news['published_at']) ? date('d/m/Y', strtotime($news['published_at'])) : '--/--/----'; ?></span>
+                <h5 class="news-title"><?php echo htmlspecialchars($news['title'], ENT_QUOTES, 'UTF-8'); ?></h5>
+                <p class="text-muted mb-0" style="font-size: 0.95rem; line-height: 1.6;"><?php echo htmlspecialchars($news['excerpt'] ?: 'Đang cập nhật nội dung mô tả...', ENT_QUOTES, 'UTF-8'); ?></p>
+                <div class="mt-auto pt-4">
+                  <span class="text-primary fw-bold" style="font-size: 0.95rem;">Đọc chi tiết &rarr;</span>
+                </div>
               </div>
             </div>
-          </div>
-        </a>
-      </div>
-      <?php endforeach; ?>
+          </a>
+        </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
     </div>
   </div>
 </section>
@@ -109,6 +98,5 @@ $newsItems = [
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="../js/navbar-shrink.js"></script>
-<!-- Intentionally omitting content-reveal.js to keep this page lightweight and fast-rendering -->
 </body>
 </html>

@@ -1,5 +1,7 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
+requireAdminOrRedirect('../index.php?forbidden=1');
 $adminPage = 'settings';
 $pageTitle = 'Cài đặt';
 $pageSubtitle = 'Cấu hình hệ thống showroom';
@@ -217,3 +219,6 @@ function toggleSidebar() {
 </script>
 </body>
 </html>
+
+
+

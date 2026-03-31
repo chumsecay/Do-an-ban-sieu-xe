@@ -1,5 +1,7 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
+requireAdminOrRedirect('../index.php?forbidden=1');
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'news';
@@ -34,13 +36,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = (int) ($_POST['post_id'] ?? 0);
         if ($id) {
             $status = isset($_POST['is_published']) ? 'published' : 'draft';
-            $stmt = $pdo->prepare("UPDATE news_posts SET title=?, excerpt=?, content=?, featured_image=?, status=? WHERE id=?");
+            $publishedAt = $status === 'published' ? date('Y-m-d H:i:s') : null;
+            $stmt = $pdo->prepare("UPDATE news_posts SET title=?, excerpt=?, content=?, featured_image=?, status=?, published_at=? WHERE id=?");
             $stmt->execute([
                 $_POST['title']   ?? '',
                 $_POST['excerpt'] ?? '',
                 $_POST['content'] ?? '',
                 $_POST['cover']   ?? '',
                 $status,
+                $publishedAt,
                 $id
             ]);
         }
@@ -185,8 +189,8 @@ if ($editId > 0) {
                   <?php foreach ($posts as $p): ?>
                   <tr>
                     <td class="ps-4">
-                      <?php if (!empty($p['cover_image_url'])): ?>
-                        <img src="<?php echo htmlspecialchars($p['cover_image_url']); ?>" alt=""
+                      <?php if (!empty($p['featured_image'])): ?>
+                        <img src="<?php echo htmlspecialchars($p['featured_image']); ?>" alt=""
                              style="width:60px;height:45px;object-fit:cover;border-radius:8px;">
                       <?php else: ?>
                         <div style="width:60px;height:45px;background:#f1f5f9;border-radius:8px;display:flex;align-items:center;justify-content:center;">
@@ -250,3 +254,6 @@ if ($editId > 0) {
 </script>
 </body>
 </html>
+
+
+

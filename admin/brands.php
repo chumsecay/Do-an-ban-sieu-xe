@@ -1,5 +1,7 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
+requireAdminOrRedirect('../index.php?forbidden=1');
 $adminPage = 'brands';
 $pageTitle = 'Quản lý hãng';
 $appName = env('APP_NAME', 'FLCar');
@@ -98,3 +100,6 @@ $appName = env('APP_NAME', 'FLCar');
 
 </body>
 </html>
+
+
+

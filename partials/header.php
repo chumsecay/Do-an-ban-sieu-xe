@@ -16,12 +16,12 @@ $cartUrl = $pageBase . 'cart.php';
 $ordersUrl = $pageBase . 'orders.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE && !headers_sent()) {
-    session_start();
+    ensureSessionStarted();
 }
 
-$isLoggedIn = session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['is_logged_in']);
-$isAdmin = $isLoggedIn && (($_SESSION['user_role'] ?? '') === 'admin' || !empty($_SESSION['is_admin_logged_in']));
-$displayName = $isLoggedIn ? (string)($_SESSION['user_name'] ?? ($_SESSION['admin_name'] ?? 'Tai khoan')) : '';
+$isLoggedIn = isUserLoggedIn();
+$isAdmin = isAdminLoggedIn();
+$displayName = $isLoggedIn ? (string)($_SESSION['user_name'] ?? ($_SESSION['admin_name'] ?? ($_SESSION['display_name'] ?? 'Tai khoan'))) : '';
 $accountRoleLabel = $isAdmin ? 'Quan tri vien' : 'Khach hang';
 $avatarLetter = '';
 if ($displayName !== '') {

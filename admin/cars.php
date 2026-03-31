@@ -1,5 +1,7 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
+requireAdminOrRedirect('../index.php?forbidden=1');
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'cars';
@@ -323,3 +325,6 @@ try {
 </script>
 </body>
 </html>
+
+
+
