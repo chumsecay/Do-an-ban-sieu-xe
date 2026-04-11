@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
 require_once __DIR__ . '/../config/database.php';
+ensureSessionStarted();
 
 $currentPage = 'showroom';
 $appName = env('APP_NAME', 'FLCar');
@@ -63,7 +65,7 @@ try {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Khám phá bộ sưu tập xe cao cấp tại FLCar Showroom">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="../css/flcar-common.css?v=3" rel="stylesheet">
+<link href="../css/flcar-common.css?v=12" rel="stylesheet">
 <link rel="icon" href="../img/logo.png" type="image/png">
 </head>
 <body>

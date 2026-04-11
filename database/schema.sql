@@ -316,3 +316,15 @@ CREATE TABLE IF NOT EXISTS warranties (
   CONSTRAINT fk_warranties_car FOREIGN KEY (car_id) REFERENCES cars(id),
   CONSTRAINT fk_warranties_customer FOREIGN KEY (customer_id) REFERENCES customers(id)
 ) ENGINE=InnoDB;
+
+-- =========================
+-- 10) DEFAULT ADMIN ACCOUNT
+-- =========================
+-- Plaintext password is intentionally kept by project requirement.
+-- username: admin
+-- password: admin123
+INSERT INTO admins (username, email, password_hash, full_name, role, is_active)
+SELECT 'admin', 'admin@flcar.vn', 'admin123', 'System Administrator', 'super_admin', 1
+WHERE NOT EXISTS (
+  SELECT 1 FROM admins WHERE username = 'admin'
+);

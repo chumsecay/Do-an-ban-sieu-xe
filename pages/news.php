@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
+ensureSessionStarted();
 $currentPage = 'news';
 $appName = env('APP_NAME', 'FLCar');
 
@@ -49,7 +51,7 @@ $newsItems = [
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tin Tức & Sự Kiện - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="../css/flcar-common.css?v=6" rel="stylesheet">
+<link href="../css/flcar-common.css?v=12" rel="stylesheet">
 <link rel="icon" href="../img/logo.png" type="image/png">
 </head>
 <body>

@@ -1,13 +1,35 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
+require_once __DIR__ . '/../bootstrap/auth.php';
+
 $appName = env('APP_NAME', 'FLCar');
 $currentPage = $currentPage ?? '';
-// Detect if we're inside pages/ subdirectory
-$inSubDir = (strpos(str_replace('\\','/',__DIR__), '/partials') !== false);
 $scriptDir = dirname($_SERVER['SCRIPT_FILENAME'] ?? '');
 $isSubPage = (basename($scriptDir) === 'pages');
 $base = $isSubPage ? '../' : '';
 $pageBase = $isSubPage ? '' : 'pages/';
+$loginUrl = $base . 'login.php';
+$logoutUrl = $base . 'logout.php';
+$adminUrl = $base . 'admin/index.php';
+$accountUrl = $pageBase . 'account.php';
+$cartUrl = $pageBase . 'cart.php';
+$ordersUrl = $pageBase . 'orders.php';
+
+if (session_status() !== PHP_SESSION_ACTIVE && !headers_sent()) {
+    session_start();
+}
+
+$isLoggedIn = session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['is_logged_in']);
+$isAdmin = $isLoggedIn && (($_SESSION['user_role'] ?? '') === 'admin' || !empty($_SESSION['is_admin_logged_in']));
+$displayName = $isLoggedIn ? (string)($_SESSION['user_name'] ?? ($_SESSION['admin_name'] ?? 'Tai khoan')) : '';
+$accountRoleLabel = $isAdmin ? 'Quan tri vien' : 'Khach hang';
+$avatarLetter = '';
+if ($displayName !== '') {
+    $avatarLetter = strtoupper(function_exists('mb_substr') ? (string)mb_substr($displayName, 0, 1) : substr($displayName, 0, 1));
+}
+if ($avatarLetter === '') {
+    $avatarLetter = 'U';
+}
 ?>
 <nav id="siteNavbar" class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top site-navbar">
   <div class="container">
@@ -19,24 +41,24 @@ $pageBase = $isSubPage ? '' : 'pages/';
     </button>
     <div class="collapse navbar-collapse" id="menu">
       <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'home' ? 'active' : ''; ?>" href="<?php echo $base; ?>index.php">Trang Chủ</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'home' ? 'active' : ''; ?>" href="<?php echo $base; ?>index.php">Trang Chu</a></li>
         <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'showroom' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>showroom.php">Showroom</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'about' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>about.php">Giới Thiệu</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'news' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>news.php">Tin Tức</a></li>
-        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'contact' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>contact.php">Liên Hệ</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'about' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>about.php">Gioi Thieu</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'news' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>news.php">Tin Tuc</a></li>
+        <li class="nav-item"><a class="nav-link <?php echo $currentPage === 'contact' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>contact.php">Lien He</a></li>
+
         <li class="nav-item ms-lg-2 d-flex align-items-center position-relative">
           <div class="nav-search-box" id="navSearchBox">
-            <button class="nav-search-btn" id="navSearchBtn" aria-label="Tìm kiếm">
+            <button class="nav-search-btn" id="navSearchBtn" aria-label="Tim kiem">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
                 <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
               </svg>
             </button>
-            <input type="text" id="navSearchInput" class="nav-search-input" placeholder="Tìm xe, tin tức..." autocomplete="off">
+            <input type="text" id="navSearchInput" class="nav-search-input" placeholder="Tim xe, tin tuc..." autocomplete="off">
           </div>
-          
-          <!-- Dropdown Results -->
+
           <div class="nav-search-dropdown d-none" id="navSearchResults">
-            <div class="dropdown-category">Xe Nổi Bật</div>
+            <div class="dropdown-category">Xe Noi Bat</div>
             <a href="<?php echo $pageBase; ?>car-detail.php" class="dropdown-item d-flex align-items-center text-decoration-none">
               <img src="<?php echo $base; ?>img/mercedes-amg-63.jpg" class="rounded me-3" alt="Mercedes">
               <div>
@@ -52,21 +74,44 @@ $pageBase = $isSubPage ? '' : 'pages/';
               </div>
             </a>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-category">Tin tức</div>
+            <div class="dropdown-category">Tin tuc</div>
             <a href="<?php echo $pageBase; ?>news.php" class="dropdown-item d-flex align-items-center text-decoration-none">
               <img src="<?php echo $base; ?>img/hero.jpg" class="rounded me-3" alt="News">
               <div>
-                <h6 class="mb-1 text-dark fw-bold" style="font-size:0.85rem; line-height: 1.3">Chương trình khuyến mãi mùa tựu trường</h6>
+                <h6 class="mb-1 text-dark fw-bold" style="font-size:0.85rem; line-height:1.3">Chuong trinh khuyen mai mua tuu truong</h6>
                 <small class="text-muted" style="font-size:0.75rem">12/08/2026</small>
               </div>
             </a>
           </div>
         </li>
-        <li class="nav-item ms-lg-2"><a class="nav-link nav-login <?php echo $currentPage === 'login' ? 'active' : ''; ?>" href="<?php echo $pageBase; ?>login.php">Đăng Nhập</a></li>
-        <li class="nav-item ms-lg-2"><a class="nav-link nav-admin <?php echo $currentPage === 'admin' ? 'active' : ''; ?>" href="<?php echo $base; ?>admin/index.php">Quản Trị</a></li>
+
+        <?php if (!$isLoggedIn): ?>
+          <li class="nav-item ms-lg-2"><a class="nav-link nav-login <?php echo $currentPage === 'login' ? 'active' : ''; ?>" href="<?php echo $loginUrl; ?>">Dang Nhap</a></li>
+        <?php else: ?>
+          <li class="nav-item ms-lg-2 position-relative nav-account-wrapper" id="navAccountWrapper">
+            <button type="button" class="nav-account-toggle" id="navAccountToggle" aria-expanded="false">
+              <span class="nav-account-avatar"><?php echo htmlspecialchars($avatarLetter, ENT_QUOTES, 'UTF-8'); ?></span>
+              <span class="nav-account-name"><?php echo htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8'); ?></span>
+              <span class="nav-account-caret" aria-hidden="true"></span>
+            </button>
+
+            <div class="nav-account-menu" id="navAccountMenu" role="menu">
+              <div class="nav-account-menu-head">
+                <strong><?php echo htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8'); ?></strong>
+                <small><?php echo htmlspecialchars($accountRoleLabel, ENT_QUOTES, 'UTF-8'); ?></small>
+              </div>
+              <a class="nav-account-item" href="<?php echo $accountUrl; ?>">Tai khoan cua toi</a>
+              <a class="nav-account-item" href="<?php echo $cartUrl; ?>">Gio hang</a>
+              <a class="nav-account-item" href="<?php echo $ordersUrl; ?>">Don mua</a>
+              <?php if ($isAdmin): ?>
+                <a class="nav-account-item nav-account-item-admin" href="<?php echo $adminUrl; ?>">Quan tri</a>
+              <?php endif; ?>
+              <div class="nav-account-divider"></div>
+              <a class="nav-account-item nav-account-item-logout" href="<?php echo $logoutUrl; ?>">Dang xuat</a>
+            </div>
+          </li>
+        <?php endif; ?>
       </ul>
     </div>
   </div>
 </nav>
-
-

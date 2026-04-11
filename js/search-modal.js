@@ -4,58 +4,111 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('navSearchInput');
   const searchResults = document.getElementById('navSearchResults');
 
-  if (!searchBox || !searchBtn) return;
+  const accountWrapper = document.getElementById('navAccountWrapper');
+  const accountToggle = document.getElementById('navAccountToggle');
+  const accountMenu = document.getElementById('navAccountMenu');
 
-  function openSearch() {
-    searchBox.classList.add('expanded');
-    setTimeout(() => { searchInput.focus(); }, 300);
-  }
+  let closeSearch = () => {};
+  let closeAccount = () => {};
 
-  function closeSearch() {
-    searchBox.classList.remove('expanded');
-    searchInput.value = '';
-    searchResults.classList.remove('show');
-    setTimeout(() => { searchResults.classList.add('d-none'); }, 300);
-  }
-
-  searchBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (searchBox.classList.contains('expanded')) {
-       // if already expanded, perform search or focus
-       searchInput.focus();
-    } else {
-       openSearch();
+  if (searchBox && searchBtn && searchInput && searchResults) {
+    function openSearch() {
+      searchBox.classList.add('expanded');
+      setTimeout(() => {
+        searchInput.focus();
+      }, 300);
     }
-  });
 
-  // Close when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!searchBox.contains(e.target) && !searchResults.contains(e.target)) {
+    closeSearch = function closeSearchImpl() {
+      searchBox.classList.remove('expanded');
+      searchInput.value = '';
+      searchResults.classList.remove('show');
+      setTimeout(() => {
+        searchResults.classList.add('d-none');
+      }, 300);
+    };
+
+    searchBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeAccount();
+
       if (searchBox.classList.contains('expanded')) {
+        searchInput.focus();
+      } else {
+        openSearch();
+      }
+    });
+
+    searchInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (val.length > 0) {
+        searchResults.classList.remove('d-none');
+        setTimeout(() => {
+          searchResults.classList.add('show');
+        }, 10);
+      } else {
+        searchResults.classList.remove('show');
+        setTimeout(() => {
+          searchResults.classList.add('d-none');
+        }, 300);
+      }
+    });
+  }
+
+  if (accountWrapper && accountToggle && accountMenu) {
+    const isDesktop = () => window.matchMedia('(min-width: 992px)').matches;
+
+    function openAccount() {
+      accountWrapper.classList.add('open');
+      accountToggle.setAttribute('aria-expanded', 'true');
+    }
+
+    closeAccount = function closeAccountImpl() {
+      accountWrapper.classList.remove('open');
+      accountToggle.setAttribute('aria-expanded', 'false');
+    };
+
+    accountToggle.addEventListener('click', (e) => {
+      if (isDesktop()) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      closeSearch();
+
+      if (accountWrapper.classList.contains('open')) {
+        closeAccount();
+      } else {
+        openAccount();
+      }
+    });
+
+    accountMenu.querySelectorAll('a').forEach((item) => {
+      item.addEventListener('click', () => {
+        closeAccount();
+      });
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (searchBox && searchResults && searchBox.classList.contains('expanded')) {
+      if (!searchBox.contains(e.target) && !searchResults.contains(e.target)) {
         closeSearch();
+      }
+    }
+
+    if (accountWrapper && accountWrapper.classList.contains('open')) {
+      if (!accountWrapper.contains(e.target)) {
+        closeAccount();
       }
     }
   });
 
-  // Escape to close
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && searchBox.classList.contains('expanded')) {
+    if (e.key === 'Escape') {
       closeSearch();
-    }
-  });
-
-  // Mock search logic for dropdown
-  searchInput.addEventListener('input', (e) => {
-    const val = e.target.value.trim();
-    if (val.length > 0) {
-      searchResults.classList.remove('d-none');
-      // Timeout to allow display:block to apply before animating opacity
-      setTimeout(() => {
-        searchResults.classList.add('show');
-      }, 10);
-    } else {
-      searchResults.classList.remove('show');
-      setTimeout(() => { searchResults.classList.add('d-none'); }, 300);
+      closeAccount();
     }
   });
 });
