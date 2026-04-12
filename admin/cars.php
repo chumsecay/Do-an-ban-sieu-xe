@@ -178,6 +178,25 @@ function ensureExistingCategory(PDO $pdo, int $categoryId): int
     $pdo->prepare('INSERT INTO car_categories (name, slug, is_active) VALUES (?, ?, 1)')->execute(['Khac', 'khac']);
     return (int)$pdo->lastInsertId();
 }
+
+function getCarDependencyCounts(PDO $pdo, int $carId): array
+{
+    $tables = [
+        'orders' => 'SELECT COUNT(*) FROM orders WHERE car_id = ?',
+        'order_details' => 'SELECT COUNT(*) FROM order_details WHERE car_id = ?',
+        'warranties' => 'SELECT COUNT(*) FROM warranties WHERE car_id = ?',
+        'car_inquiries' => 'SELECT COUNT(*) FROM car_inquiries WHERE car_id = ?',
+    ];
+
+    $counts = [];
+    foreach ($tables as $key => $sql) {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$carId]);
+        $counts[$key] = (int)$stmt->fetchColumn();
+    }
+
+    return $counts;
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
 
@@ -188,11 +207,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirectCars('car_invalid_data');
             }
 
+            $dependencyCounts = getCarDependencyCounts($pdo, $id);
+            if (array_sum($dependencyCounts) > 0) {
+                redirectCars('car_delete_blocked');
+            }
+
             $imgStmt = $pdo->prepare('SELECT image_url FROM car_images WHERE car_id = ?');
             $imgStmt->execute([$id]);
             $images = $imgStmt->fetchAll();
 
-            $pdo->prepare('DELETE FROM cars WHERE id = ?')->execute([$id]);
+            try {
+                $pdo->prepare('DELETE FROM cars WHERE id = ?')->execute([$id]);
+            } catch (PDOException $e) {
+                // SQLSTATE 23*** => integrity constraint violation (FK still references this car)
+                if (str_starts_with((string)$e->getCode(), '23')) {
+                    redirectCars('car_delete_blocked');
+                }
+                throw $e;
+            }
             foreach ($images as $img) {
                 $url = (string)($img['image_url'] ?? '');
                 if ($url !== '') {
@@ -440,6 +472,7 @@ $alertMap = [
     'car_added' => ['success', 'Da them xe moi.'],
     'car_added_with_image' => ['success', 'Da them xe moi va da gan anh.'],
     'car_deleted' => ['warning', 'Da xoa xe.'],
+    'car_delete_blocked' => ['danger', 'Khong the xoa xe nay vi da phat sinh du lieu lien quan (don hang/bao hanh/chi tiet don/inquiry).'],
     'car_invalid_name' => ['danger', 'Ten xe khong hop le.'],
     'car_invalid_data' => ['danger', 'Du lieu xe khong hop le.'],
     'car_invalid_image_url' => ['danger', 'Link anh khong hop le.'],
