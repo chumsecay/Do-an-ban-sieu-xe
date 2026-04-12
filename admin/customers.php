@@ -126,12 +126,12 @@ if ($editId > 0) {
 }
 
 $alertMap = [
-    'added' => ['success', 'Da them khach hang moi.'],
-    'edited' => ['info', 'Da cap nhat ho so khach hang.'],
-    'deleted' => ['warning', 'Da xoa ho so khach hang.'],
-    'duplicate' => ['danger', 'Email hoac so dien thoai da ton tai.'],
-    'invalid_data' => ['danger', 'Du lieu khong hop le.'],
-    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+    'added' => ['success', 'Đã thêm khách hàng mới.'],
+    'edited' => ['info', 'Đã cập nhật hồ sơ khách hàng.'],
+    'deleted' => ['warning', 'Đã xóa hồ sơ khách hàng.'],
+    'duplicate' => ['danger', 'Email hoặc số điện thoại đã tồn tại.'],
+    'invalid_data' => ['danger', 'Dữ liệu không hợp lệ.'],
+    'db_error' => ['danger', 'Có lỗi CSDL khi xử lý thao tác.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -139,7 +139,7 @@ $alertMap = [
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Khach Hang - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?> Admin</title>
+<title>Khách Hàng - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?> Admin</title>
 <link rel="icon" href="../img/logo.png" type="image/png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="../css/admin.css" rel="stylesheet">
@@ -163,15 +163,15 @@ $alertMap = [
     <main class="admin-content p-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 class="h4 fw-bold text-dark mb-1">Quan Ly Khach Hang</h2>
-          <p class="text-secondary mb-0 small">Them, sua, xoa va theo doi ho so khach hang.</p>
+          <h2 class="h4 fw-bold text-dark mb-1">Quản Lý Khách Hàng</h2>
+          <p class="text-secondary mb-0 small">Thêm, sửa, xóa và theo dõi hồ sơ khách hàng.</p>
         </div>
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tong khach hang</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tổng khách hàng</p></div></div>
         <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['vip']; ?></h3><p>Khach VIP</p></div></div>
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['new']; ?></h3><p>Khach moi</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['new']; ?></h3><p>Khach mới</p></div></div>
       </div>
 
       <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
@@ -187,7 +187,7 @@ $alertMap = [
             <?php endif; ?>
 
             <div class="col-md-3">
-              <label class="form-label small fw-bold text-secondary">Ho ten</label>
+              <label class="form-label small fw-bold text-secondary">Họ tên</label>
               <input type="text" name="full_name" class="form-control bg-light border-0" required
                      value="<?php echo htmlspecialchars((string)($editCustomer['full_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
@@ -197,22 +197,22 @@ $alertMap = [
                      value="<?php echo htmlspecialchars((string)($editCustomer['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-2">
-              <label class="form-label small fw-bold text-secondary">So dien thoai</label>
+              <label class="form-label small fw-bold text-secondary">Số điện thoại</label>
               <input type="text" name="phone" class="form-control bg-light border-0"
                      value="<?php echo htmlspecialchars((string)($editCustomer['phone'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-2">
               <label class="form-label small fw-bold text-secondary">Hang</label>
               <select name="tier" class="form-select bg-light border-0">
-                <option value="new" <?php echo (!$editCustomer || ($editCustomer['tier'] ?? '') === 'new') ? 'selected' : ''; ?>>Khach moi</option>
+                <option value="new" <?php echo (!$editCustomer || ($editCustomer['tier'] ?? '') === 'new') ? 'selected' : ''; ?>>Khach mới</option>
                 <option value="regular" <?php echo (($editCustomer['tier'] ?? '') === 'regular') ? 'selected' : ''; ?>>Than thiet</option>
                 <option value="vip" <?php echo (($editCustomer['tier'] ?? '') === 'vip') ? 'selected' : ''; ?>>VIP</option>
               </select>
             </div>
             <div class="col-md-2 d-flex gap-2">
-              <button type="submit" class="btn btn-primary fw-bold px-3"><?php echo $editCustomer ? 'Luu' : 'Them'; ?></button>
+              <button type="submit" class="btn btn-primary fw-bold px-3"><?php echo $editCustomer ? 'Lưu' : 'Thêm'; ?></button>
               <?php if ($editCustomer): ?>
-                <a class="btn btn-light border fw-semibold" href="customers.php">Huy</a>
+                <a class="btn btn-light border fw-semibold" href="customers.php">Hủy</a>
               <?php endif; ?>
             </div>
           </form>
@@ -223,20 +223,20 @@ $alertMap = [
         <div class="card-body p-3">
           <form method="GET" class="row g-2 mb-3">
             <div class="col-md-5">
-              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim theo ten, email, sdt..."
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tìm theo tên, email, SĐT..."
                      value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-3">
               <select name="tier" class="form-select bg-light border-0">
-                <option value="">Tat ca hang</option>
-                <option value="new" <?php echo $tierFilter === 'new' ? 'selected' : ''; ?>>Khach moi</option>
+                <option value="">Tất cả hang</option>
+                <option value="new" <?php echo $tierFilter === 'new' ? 'selected' : ''; ?>>Khach mới</option>
                 <option value="regular" <?php echo $tierFilter === 'regular' ? 'selected' : ''; ?>>Than thiet</option>
                 <option value="vip" <?php echo $tierFilter === 'vip' ? 'selected' : ''; ?>>VIP</option>
               </select>
             </div>
             <div class="col-md-4 d-flex gap-2">
-              <button class="btn btn-outline-primary fw-semibold" type="submit">Loc</button>
-              <a href="customers.php" class="btn btn-outline-secondary fw-semibold">Reset</a>
+              <button class="btn btn-outline-primary fw-semibold" type="submit">Lọc</button>
+              <a href="customers.php" class="btn btn-outline-secondary fw-semibold">Đặt lại</a>
             </div>
           </form>
 
@@ -244,17 +244,17 @@ $alertMap = [
             <table class="table align-middle mb-0">
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-                  <th>Khach hang</th>
-                  <th>Dien thoai</th>
+                  <th>Khách hàng</th>
+                  <th>Điện thoại</th>
                   <th>Email</th>
                   <th>Hang</th>
-                  <th>Ngay tao</th>
-                  <th class="text-end">Thao tac</th>
+                  <th>Ngày tạo</th>
+                  <th class="text-end">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (!$customers): ?>
-                  <tr><td colspan="6" class="text-center py-5 text-muted">Chua co du lieu khach hang.</td></tr>
+                  <tr><td colspan="6" class="text-center py-5 text-muted">Chưa có dữ liệu khách hàng.</td></tr>
                 <?php else: ?>
                   <?php foreach ($customers as $c): ?>
                     <tr>
@@ -272,16 +272,16 @@ $alertMap = [
                         <?php elseif (($c['tier'] ?? '') === 'regular'): ?>
                           <span class="badge bg-success text-success px-3 py-2 rounded-pill bg-opacity-25">Than thiet</span>
                         <?php else: ?>
-                          <span class="badge bg-info text-info px-3 py-2 rounded-pill bg-opacity-10">Khach moi</span>
+                          <span class="badge bg-info text-info px-3 py-2 rounded-pill bg-opacity-10">Khach mới</span>
                         <?php endif; ?>
                       </td>
                       <td class="text-secondary small fw-medium"><?php echo htmlspecialchars(date('d/m/Y', strtotime((string)$c['created_at'])), ENT_QUOTES, 'UTF-8'); ?></td>
                       <td class="text-end">
-                        <a href="customers.php?edit=<?php echo (int)$c['id']; ?>" class="btn btn-sm btn-outline-primary">Sua</a>
-                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa ho so khach hang nay?');">
+                        <a href="customers.php?edit=<?php echo (int)$c['id']; ?>" class="btn btn-sm btn-outline-primary">Sửa</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xóa hồ sơ khách hàng nay?');">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="customer_id" value="<?php echo (int)$c['id']; ?>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
                         </form>
                       </td>
                     </tr>
@@ -299,3 +299,4 @@ $alertMap = [
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

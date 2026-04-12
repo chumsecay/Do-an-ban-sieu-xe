@@ -5,8 +5,8 @@ requireAdminOrRedirect('../index.php?forbidden=1');
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'settings';
-$pageTitle = 'Cai dat';
-$pageSubtitle = 'Cau hinh he thong showroom';
+$pageTitle = 'Cài đặt';
+$pageSubtitle = 'Cấu hình hệ thống showroom';
 $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
 
@@ -177,18 +177,18 @@ $notifyWeeklyReport = $setting('NOTIFY_WEEKLY_REPORT', '0') === '1';
 $maintenanceMode = $setting('MAINTENANCE_MODE', '0') === '1';
 
 $alertMap = [
-    'saved' => ['success', 'Da luu cai dat thanh cong.'],
-    'cache_cleared' => ['info', 'Da xoa cache he thong.'],
-    'reset_done' => ['warning', 'Da reset du lieu nghiep vu.'],
-    'reset_confirm_failed' => ['danger', 'Can nhap dung chu RESET de xac nhan.'],
-    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+    'saved' => ['success', 'Đã lưu cài đặt thành công.'],
+    'cache_cleared' => ['info', 'Đã xóa cache hệ thống.'],
+    'reset_done' => ['warning', 'Đã đặt lại dữ liệu nghiệp vụ.'],
+    'reset_confirm_failed' => ['danger', 'Cần nhập đúng chữ RESET để xác nhận.'],
+    'db_error' => ['danger', 'Có lỗi CSDL khi xử lý thao tác.'],
 ];
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Cai Dat - <?php echo htmlspecialchars($appNameSetting, ENT_QUOTES, 'UTF-8'); ?></title>
+<title>Cài đặt - <?php echo htmlspecialchars($appNameSetting, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="../css/admin.css" rel="stylesheet">
@@ -245,7 +245,7 @@ $alertMap = [
 
     <div class="settings-grid">
       <div class="panel">
-        <div class="panel-header"><h2>Thong tin chung</h2></div>
+        <div class="panel-header"><h2>Thông tin chung</h2></div>
         <div style="padding:24px">
           <form method="POST">
             <input type="hidden" name="action" value="save_general">
@@ -254,20 +254,20 @@ $alertMap = [
               <input type="text" name="app_name" value="<?php echo htmlspecialchars($appNameSetting, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="form-group">
-              <label>Tieu de trang chu</label>
+              <label>Tiêu đề trang chủ</label>
               <input type="text" name="hero_title" value="<?php echo htmlspecialchars($heroTitle, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="form-group">
               <label>Meta description</label>
               <textarea name="meta_description"><?php echo htmlspecialchars($metaDescription, ENT_QUOTES, 'UTF-8'); ?></textarea>
             </div>
-            <button class="btn-save" type="submit">Luu thay doi</button>
+            <button class="btn-save" type="submit">Lưu thay doi</button>
           </form>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-header"><h2>Thong tin lien he</h2></div>
+        <div class="panel-header"><h2>Thông tin liên hệ</h2></div>
         <div style="padding:24px">
           <form method="POST">
             <input type="hidden" name="action" value="save_contact">
@@ -286,79 +286,79 @@ $alertMap = [
             <div class="form-group">
               <label>Google Maps embed URL</label>
               <input type="text" name="google_maps_embed" value="<?php echo htmlspecialchars($googleMapsEmbed, ENT_QUOTES, 'UTF-8'); ?>">
-              <p class="hint">Dan URL embed de hien thi ban do o trang lien he.</p>
+              <p class="hint">Dán URL embed để hiển thị bản đồ ở trang liên hệ.</p>
             </div>
-            <button class="btn-save" type="submit">Luu thay doi</button>
+            <button class="btn-save" type="submit">Lưu thay doi</button>
           </form>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-header"><h2>Thong bao he thong</h2></div>
+        <div class="panel-header"><h2>Thông báo hệ thống</h2></div>
         <div style="padding:20px 24px">
           <form method="POST">
             <input type="hidden" name="action" value="save_notifications">
 
             <div class="toggle-row">
-              <div class="toggle-label"><strong>Email don hang moi</strong><p>Thong bao khi co don moi.</p></div>
+              <div class="toggle-label"><strong>Email đơn hàng mới</strong><p>Thong bảo khi co don mới.</p></div>
               <input type="hidden" name="notify_new_order" value="0">
               <input type="checkbox" name="notify_new_order" value="1" <?php echo $notifyNewOrder ? 'checked' : ''; ?>>
             </div>
 
             <div class="toggle-row">
-              <div class="toggle-label"><strong>Email khach hang moi</strong><p>Thong bao khi them khach hang.</p></div>
+              <div class="toggle-label"><strong>Email khách hàng mới</strong><p>Thong bảo khi thêm khách hàng.</p></div>
               <input type="hidden" name="notify_new_customer" value="0">
               <input type="checkbox" name="notify_new_customer" value="1" <?php echo $notifyNewCustomer ? 'checked' : ''; ?>>
             </div>
 
             <div class="toggle-row">
-              <div class="toggle-label"><strong>Email lien he tu form</strong><p>Thong bao message moi tu contact form.</p></div>
+              <div class="toggle-label"><strong>Email liên hệ từ form</strong><p>Thông báo message mới từ contact form.</p></div>
               <input type="hidden" name="notify_contact_form" value="0">
               <input type="checkbox" name="notify_contact_form" value="1" <?php echo $notifyContactForm ? 'checked' : ''; ?>>
             </div>
 
             <div class="toggle-row">
-              <div class="toggle-label"><strong>Bao cao tuan</strong><p>Gui tong hop tuan cho admin.</p></div>
+              <div class="toggle-label"><strong>Báo cáo tuần</strong><p>Gửi tổng hợp tuần cho admin.</p></div>
               <input type="hidden" name="notify_weekly_report" value="0">
               <input type="checkbox" name="notify_weekly_report" value="1" <?php echo $notifyWeeklyReport ? 'checked' : ''; ?>>
             </div>
 
             <div style="margin-top:18px">
-              <button class="btn-save" type="submit">Luu thong bao</button>
+              <button class="btn-save" type="submit">Lưu thong bảo</button>
             </div>
           </form>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-header"><h2>Bao tri he thong</h2></div>
+        <div class="panel-header"><h2>Bảo trì hệ thống</h2></div>
         <div style="padding:24px">
           <form method="POST" class="mb-4">
             <input type="hidden" name="action" value="save_maintenance">
             <div class="form-group">
-              <label>Che do bao tri</label>
+              <label>Che do bảo trí</label>
               <div style="display:flex;align-items:center;gap:12px">
                 <input type="hidden" name="maintenance_mode" value="0">
                 <input type="checkbox" name="maintenance_mode" value="1" <?php echo $maintenanceMode ? 'checked' : ''; ?>>
-                <span class="hint">Bat de ngan truy cap tu ben ngoai trong luc bao tri.</span>
+                <span class="hint">Bật để ngăn truy cập từ bên ngoài trong lúc bảo trì.</span>
               </div>
             </div>
-            <button class="btn-save" type="submit">Luu che do bao tri</button>
+            <button class="btn-save" type="submit">Lưu chế độ bảo trì</button>
           </form>
 
           <form method="POST" class="mb-4">
             <input type="hidden" name="action" value="clear_cache">
-            <button class="btn-outline" type="submit">Xoa cache he thong</button>
+            <button class="btn-outline" type="submit">Xóa cache hệ thống</button>
           </form>
 
-          <form method="POST" onsubmit="return confirm('Ban chac chan muon reset du lieu nghiep vu?');">
+          <form method="POST" onsubmit="return confirm('Bạn chắc chắn muốn đặt lại dữ liệu nghiệp vụ?');">
             <input type="hidden" name="action" value="reset_data">
             <div class="form-group" style="margin-bottom:10px">
-              <label style="color:#dc2626">Vung nguy hiem</label>
-              <input type="text" name="confirm_reset" class="form-control" placeholder="Nhap RESET de xac nhan">
-              <p class="hint">Thao tac se xoa du lieu xe, don hang, khach hang, bao hanh, nhan vien, tin tuc.</p>
+              <label style="color:#dc2626">Vùng nguy hiểm</label>
+              <input type="text" name="confirm_reset" class="form-control" placeholder="Nhập RESET để xác nhận">
+              <p class="hint">Thao tác sẽ xóa dữ liệu xe, đơn hàng, khách hàng, bảo hành, nhân viên, tin tức.</p>
             </div>
-            <button class="btn-danger" type="submit">Reset du lieu nghiep vu</button>
+            <button class="btn-danger" type="submit">Đặt lại dữ liệu nghiệp vụ</button>
           </form>
         </div>
       </div>
@@ -368,3 +368,4 @@ $alertMap = [
 
 </body>
 </html>
+

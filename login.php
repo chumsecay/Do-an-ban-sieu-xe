@@ -77,6 +77,37 @@ function verifyGoogleIdToken(string $idToken, string $expectedClientId): ?array
     ];
 }
 
+function ensureCustomerBalanceColumn(PDO $pdo): void
+{
+    $check = $pdo->query("SHOW COLUMNS FROM customers LIKE 'balance'");
+    if (!$check->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN balance DECIMAL(15,2) NOT NULL DEFAULT 0.00 AFTER tier");
+    }
+}
+
+function findOrCreateCustomerByEmail(PDO $pdo, string $email, string $fullName): array
+{
+    ensureCustomerBalanceColumn($pdo);
+
+    $find = $pdo->prepare('SELECT id, full_name, email, balance FROM customers WHERE LOWER(email) = LOWER(?) LIMIT 1');
+    $find->execute([$email]);
+    $customer = $find->fetch();
+    if ($customer) {
+        return $customer;
+    }
+
+    $insert = $pdo->prepare('INSERT INTO customers (full_name, email, tier, balance) VALUES (?, ?, ?, 0)');
+    $insert->execute([$fullName, $email, 'new']);
+
+    $newId = (int)$pdo->lastInsertId();
+    return [
+        'id' => $newId,
+        'full_name' => $fullName,
+        'email' => $email,
+        'balance' => 0,
+    ];
+}
+
 $appName = env('APP_NAME', 'FLCar');
 $googleClientId = trim((string)env('GOOGLE_CLIENT_ID', ''));
 $error = '';
@@ -102,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = (string)($_POST['password'] ?? '');
 
             if ($submittedUsername === '' || $password === '') {
-                $error = 'Vui long nhap day du tai khoan va mat khau.';
+                $error = 'Vui lòng nhập đầy đủ tài khoản và mật khẩu.';
             } else {
                 $stmt = $pdo->prepare(
                     'SELECT id, username, email, password_hash, full_name, role, is_active
@@ -129,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 if ($passwordMatched) {
                     if ((int)$admin['is_active'] !== 1) {
-                        $error = 'Tai khoan admin dang bi khoa.';
+                        $error = 'Tài khoản admin đang bị khóa.';
                     } else {
                         if ($upgradeToHash || password_needs_rehash($storedPassword, PASSWORD_DEFAULT)) {
                             try {
@@ -150,21 +181,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         exit;
                     }
                 } else {
-                    $error = 'Tai khoan hoac mat khau khong chinh xac.';
+                    $error = 'Tài khoản hoặc mật khẩu không chính xác.';
                 }
             }
         } elseif ($action === 'google_login') {
             $credential = trim((string)($_POST['credential'] ?? ''));
 
             if ($googleClientId === '') {
-                $error = 'Dang nhap Google chua duoc cau hinh. Vui long them GOOGLE_CLIENT_ID vao file .env.';
+                $error = 'Đăng nhập Google chưa được cấu hình. Vui lòng thêm GOOGLE_CLIENT_ID vào file .env.';
             } elseif ($credential === '') {
-                $error = 'Khong nhan duoc token dang nhap Google.';
+                $error = 'Không nhận được token đăng nhập Google.';
             } else {
                 $profile = verifyGoogleIdToken($credential, $googleClientId);
 
                 if (!is_array($profile)) {
-                    $error = 'Xac thuc Google that bai. Vui long thu lai.';
+                    $error = 'Xác thực Google thất bại. Vui lòng thử lại.';
                 } else {
                     $stmt = $pdo->prepare(
                         'SELECT id, username, email, password_hash, full_name, role, is_active
@@ -188,19 +219,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     if ($adminByEmail && (int)$adminByEmail['is_active'] !== 1) {
-                        $error = 'Tai khoan admin lien ket email Google dang bi khoa.';
+                        $error = 'Tài khoản admin liên kết email Google đang bị khóa.';
                     } else {
-                        loginAsUser($profile['name'], $profile['email'], 'google');
+                        $customer = findOrCreateCustomerByEmail($pdo, (string)$profile['email'], (string)$profile['name']);
+                        loginAsUser([
+                            'id' => (int)$customer['id'],
+                            'full_name' => (string)$customer['full_name'],
+                            'email' => (string)$customer['email'],
+                            'balance' => (float)($customer['balance'] ?? 0),
+                        ], null, 'google');
                         header('Location: index.php?login=success');
                         exit;
                     }
                 }
             }
         } else {
-            $error = 'Yeu cau dang nhap khong hop le.';
+            $error = 'Yêu cầu đăng nhập không hợp lệ.';
         }
     } catch (Throwable $e) {
-        $error = 'Khong the ket noi CSDL de dang nhap. Vui long thu lai.';
+        $error = 'Không thể kết nối CSDL để đăng nhập. Vui lòng thử lại.';
     }
 }
 ?>
@@ -209,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dang Nhap - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
+<title>Đăng Nhập - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" href="img/logo.png" type="image/png">
@@ -322,8 +359,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="d-flex justify-content-center">
     <div class="login-card text-center">
       <img src="img/logo.png" alt="FLCar" class="login-logo">
-      <h3 class="fw-bold mb-1">Dang Nhap</h3>
-      <p class="text-white-50 mb-4" style="font-size: 0.9rem;">Admin dang nhap bang tai khoan noi bo. Nguoi dung co the dang nhap bang Google.</p>
+      <h3 class="fw-bold mb-1">Đăng Nhập</h3>
+      <p class="text-white-50 mb-4" style="font-size: 0.9rem;">Admin đăng nhập bằng tài khoản nội bộ. Người dùng có thể đăng nhập bằng Google.</p>
 
       <?php if ($error !== ''): ?>
         <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; font-size: 0.9rem; padding: 10px; border-radius: 8px;">
@@ -335,22 +372,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="hidden" name="action" value="password_login">
 
         <div class="mb-3 text-start">
-          <label class="form-label text-white-50 small fw-bold mb-1">Tai khoan admin</label>
-          <input type="text" name="username" class="form-control" placeholder="Nhap ten dang nhap admin" value="<?php echo htmlspecialchars($submittedUsername, ENT_QUOTES, 'UTF-8'); ?>" required>
+          <label class="form-label text-white-50 small fw-bold mb-1">Tài khoản admin</label>
+          <input type="text" name="username" class="form-control" placeholder="Nhập tên đăng nhập admin" value="<?php echo htmlspecialchars($submittedUsername, ENT_QUOTES, 'UTF-8'); ?>" required>
         </div>
 
         <div class="mb-3 text-start">
-          <label class="form-label text-white-50 small fw-bold mb-1">Mat khau</label>
+          <label class="form-label text-white-50 small fw-bold mb-1">Mật khẩu</label>
           <div class="input-group">
-            <input type="password" id="passwordInput" name="password" class="form-control" placeholder="Nhap mat khau" required>
-            <button type="button" id="togglePasswordBtn" class="btn btn-show-pass">Hien</button>
+            <input type="password" id="passwordInput" name="password" class="form-control" placeholder="Nhập mật khẩu" required>
+            <button type="button" id="togglePasswordBtn" class="btn btn-show-pass">Hiện</button>
           </div>
         </div>
 
-        <button type="submit" class="btn btn-login w-100">Dang Nhap Admin</button>
+        <button type="submit" class="btn btn-login w-100">Đăng Nhập Admin</button>
       </form>
 
-      <div class="divider">hoac</div>
+      <div class="divider">hoặc</div>
 
       <?php if ($googleClientId !== ''): ?>
         <div id="g_id_onload"
@@ -374,12 +411,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
       <?php else: ?>
         <div class="alert alert-warning mb-0" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; font-size: 0.85rem;">
-          Google login chua duoc cau hinh. Them <code>GOOGLE_CLIENT_ID</code> trong file <code>.env</code>.
+          Google login chưa được cấu hình. Thêm <code>GOOGLE_CLIENT_ID</code> trong file <code>.env</code>.
         </div>
       <?php endif; ?>
 
       <div class="text-white-50 mt-4" style="font-size: 0.82rem;">
-        <a href="index.php" class="text-white-50 text-decoration-none">&larr; Ve trang chu</a>
+        <a href="index.php" class="text-white-50 text-decoration-none">&larr; Về trang chủ</a>
       </div>
     </div>
   </div>
@@ -391,7 +428,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <script>
 function handleGoogleCredentialResponse(response) {
   if (!response || !response.credential) {
-    alert('Khong nhan duoc thong tin tu Google.');
+    alert('Không nhận được thông tin từ Google.');
     return;
   }
 
@@ -414,7 +451,7 @@ function handleGoogleCredentialResponse(response) {
   toggleBtn.addEventListener('click', function () {
     const showing = passwordInput.type === 'text';
     passwordInput.type = showing ? 'password' : 'text';
-    toggleBtn.textContent = showing ? 'Hien' : 'An';
+    toggleBtn.textContent = showing ? 'Hiện' : 'Ẩn';
   });
 })();
 </script>

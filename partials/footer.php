@@ -11,24 +11,24 @@ $loginUrl = $base . 'login.php';
   <div class="container">
     <div class="row g-4 align-items-start">
       <div class="col-lg-6">
-        <h5 class="fw-bold">Ve <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></h5>
-        <p class="mb-2">Chung toi mang den trai nghiem mua xe cao cap voi doi ngu tu van tan tam, kiem dinh chat luong nghiem ngat va hau mai minh bach.</p>
-        <p class="footer-contact mb-0">Showroom chinh: 123 Duong ABC, TP.HCM · Hotline: 0900 000 000 · Email: info@FLCar.vn</p>
+        <h5 class="fw-bold">Về <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></h5>
+        <p class="mb-2">Chúng tôi mang đến trải nghiệm mua xe cao cấp với đội ngũ tư vấn tận tâm, kiểm định chất lượng nghiêm ngặt và hậu mãi minh bạch.</p>
+        <p class="footer-contact mb-0">Showroom chính: 123 Đường ABC, TP.HCM · Hotline: 0900 000 000 · Email: info@FLCar.vn</p>
       </div>
       <div class="col-lg-3 col-6">
-        <h5 class="fw-bold">Kham pha</h5>
+        <h5 class="fw-bold">Khám phá</h5>
         <ul class="footer-links list-unstyled mb-0">
           <li><a href="<?php echo $pageBase; ?>showroom.php">Showroom</a></li>
-          <li><a href="<?php echo $pageBase; ?>about.php">Gioi thieu</a></li>
-          <li><a href="<?php echo $pageBase; ?>contact.php">Lien he</a></li>
+          <li><a href="<?php echo $pageBase; ?>about.php">Giới thiệu</a></li>
+          <li><a href="<?php echo $pageBase; ?>contact.php">Liên hệ</a></li>
         </ul>
       </div>
       <div class="col-lg-3 col-6">
-        <h5 class="fw-bold">Ho tro</h5>
+        <h5 class="fw-bold">Hỗ trợ</h5>
         <ul class="footer-links list-unstyled mb-0">
-          <li><a href="<?php echo $loginUrl; ?>">Dang nhap</a></li>
-          <li><a href="<?php echo $pageBase; ?>contact.php">Tu van mua xe</a></li>
-          <li><a href="<?php echo $pageBase; ?>about.php">Chinh sach dich vu</a></li>
+          <li><a href="<?php echo $loginUrl; ?>">Đăng nhập</a></li>
+          <li><a href="<?php echo $pageBase; ?>contact.php">Tư vấn mua xe</a></li>
+          <li><a href="<?php echo $pageBase; ?>about.php">Chính sách dịch vụ</a></li>
         </ul>
       </div>
     </div>

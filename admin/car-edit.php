@@ -271,14 +271,14 @@ $msgs = [
     'img_added'    => ['success', 'Đã thêm hình ảnh mới!'],
     'img_deleted'  => ['warning', 'Đã xóa hình ảnh.'],
     'cover_set'    => ['info',    'Đã đặt lại ảnh bìa.'],
-    'img_missing' => ['danger', 'Hay nhap URL hoac upload 1 file anh.'],
-    'img_invalid_url' => ['danger', 'URL anh khong hop le. Dung http/https hoac duong dan bat dau bang /.'],
-    'img_upload_failed' => ['danger', 'Upload anh that bai. Vui long thu lai.'],
-    'img_too_large' => ['danger', 'File anh vuot qua 5MB.'],
-    'img_invalid_type' => ['danger', 'Chi chap nhan JPG, PNG, WEBP, GIF, AVIF.'],
-    'img_dir_unavailable' => ['danger', 'Khong tao duoc thu muc uploads/cars.'],
-    'img_dir_not_writable' => ['danger', 'Thu muc uploads/cars khong co quyen ghi.'],
-    'img_move_failed' => ['danger', 'Khong luu duoc file anh vao uploads/cars.'],
+    'img_missing' => ['danger', 'Hãy nhập URL hoặc upload 1 file anh.'],
+    'img_invalid_url' => ['danger', 'URL ảnh không hợp lệ. Dùng http/https hoặc đường dẫn bắt đầu bằng /.'],
+    'img_upload_failed' => ['danger', 'Upload ảnh thất bại. Vui lòng thử lại.'],
+    'img_too_large' => ['danger', 'File anh vượt qua 5MB.'],
+    'img_invalid_type' => ['danger', 'Chỉ chấp nhận JPG, PNG, WEBP, GIF, AVIF.'],
+    'img_dir_unavailable' => ['danger', 'Không tạo được thư mục uploads/cars.'],
+    'img_dir_not_writable' => ['danger', 'Thư muc uploads/cars không có quyền ghi.'],
+    'img_move_failed' => ['danger', 'Không lưu được file ảnh vào uploads/cars.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -500,6 +500,7 @@ $msgs = [
 </script>
 </body>
 </html>
+
 
 
 

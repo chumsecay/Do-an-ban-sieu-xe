@@ -5,7 +5,7 @@ requireAdminOrRedirect('../index.php?forbidden=1');
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'employees';
-$pageTitle = 'Nhan vien';
+$pageTitle = 'Nhân viên';
 $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
 
@@ -150,13 +150,13 @@ if ($editId > 0) {
 }
 
 $alertMap = [
-    'added' => ['success', 'Da them nhan vien moi.'],
-    'updated' => ['info', 'Da cap nhat thong tin nhan vien.'],
-    'deleted' => ['warning', 'Da xoa nhan vien.'],
-    'duplicate' => ['danger', 'Ma nhan vien hoac email da ton tai.'],
-    'invalid_email' => ['danger', 'Email khong hop le.'],
-    'invalid_data' => ['danger', 'Du lieu khong hop le.'],
-    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+    'added' => ['success', 'Đã thêm nhân viên mới.'],
+    'updated' => ['info', 'Đã cập nhật thông tin nhân viên.'],
+    'deleted' => ['warning', 'Đã xóa nhân viên.'],
+    'duplicate' => ['danger', 'Ma nhân viên hoặc email đã tồn tại.'],
+    'invalid_email' => ['danger', 'Email không hợp lệ.'],
+    'invalid_data' => ['danger', 'Dữ liệu không hợp lệ.'],
+    'db_error' => ['danger', 'Có lỗi CSDL khi xử lý thao tác.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -186,15 +186,15 @@ $alertMap = [
     <main class="admin-content p-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 class="h4 fw-bold text-dark mb-1">Quan Ly Nhan Vien</h2>
-          <p class="text-secondary small mb-0">Quan ly thong tin, trang thai va vi tri nhan su.</p>
+          <h2 class="h4 fw-bold text-dark mb-1">Quản Lý Nhân Viên</h2>
+          <p class="text-secondary small mb-0">Quản lý thông tin, trạng thái và vị trí nhân sự.</p>
         </div>
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tong nhan vien</p></div></div>
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['active']; ?></h3><p>Dang hoat dong</p></div></div>
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['inactive']; ?></h3><p>Tam nghi / da nghi</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tổng nhân viên</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['active']; ?></h3><p>Đang hoạt động</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['inactive']; ?></h3><p>Tạm nghỉ / đã nghỉ</p></div></div>
       </div>
 
       <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
@@ -216,7 +216,7 @@ $alertMap = [
                      placeholder="<?php echo htmlspecialchars(nextEmployeeCode($pdo), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-3">
-              <label class="form-label small fw-bold text-secondary">Ho ten</label>
+              <label class="form-label small fw-bold text-secondary">Họ tên</label>
               <input type="text" name="full_name" class="form-control bg-light border-0" required
                      value="<?php echo htmlspecialchars((string)($editEmployee['full_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
@@ -226,26 +226,26 @@ $alertMap = [
                      value="<?php echo htmlspecialchars((string)($editEmployee['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-2">
-              <label class="form-label small fw-bold text-secondary">So dien thoai</label>
+              <label class="form-label small fw-bold text-secondary">Số điện thoại</label>
               <input type="text" name="phone" class="form-control bg-light border-0"
                      value="<?php echo htmlspecialchars((string)($editEmployee['phone'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-2">
-              <label class="form-label small fw-bold text-secondary">Trang thai</label>
+              <label class="form-label small fw-bold text-secondary">Trạng thái</label>
               <select name="status" class="form-select bg-light border-0">
-                <option value="active" <?php echo (!$editEmployee || ($editEmployee['status'] ?? 'active') === 'active') ? 'selected' : ''; ?>>Hoat dong</option>
-                <option value="inactive" <?php echo ($editEmployee && ($editEmployee['status'] ?? '') === 'inactive') ? 'selected' : ''; ?>>Khong hoat dong</option>
+                <option value="active" <?php echo (!$editEmployee || ($editEmployee['status'] ?? 'active') === 'active') ? 'selected' : ''; ?>>Hoat động</option>
+                <option value="inactive" <?php echo ($editEmployee && ($editEmployee['status'] ?? '') === 'inactive') ? 'selected' : ''; ?>>Không hoạt động</option>
               </select>
             </div>
             <div class="col-md-4">
-              <label class="form-label small fw-bold text-secondary">Vi tri</label>
-              <input type="text" name="position" class="form-control bg-light border-0" placeholder="Vi du: Ban hang, Ky thuat"
+              <label class="form-label small fw-bold text-secondary">Vị trí</label>
+              <input type="text" name="position" class="form-control bg-light border-0" placeholder="Ví dụ: Bán hàng, Kỹ thuật"
                      value="<?php echo htmlspecialchars((string)($editEmployee['position'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-12 d-flex gap-2">
-              <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editEmployee ? 'Luu cap nhat' : 'Them nhan vien'; ?></button>
+              <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editEmployee ? 'Lưu cập nhật' : 'Thêm nhân viên'; ?></button>
               <?php if ($editEmployee): ?>
-                <a href="employees.php" class="btn btn-light border fw-semibold">Huy sua</a>
+                <a href="employees.php" class="btn btn-light border fw-semibold">Hủy sửa</a>
               <?php endif; ?>
             </div>
           </form>
@@ -256,19 +256,19 @@ $alertMap = [
         <div class="card-body">
           <form method="GET" class="row g-2 mb-3">
             <div class="col-md-4">
-              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim theo ma, ten, email, sdt..."
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tìm theo mã, tên, email, SĐT..."
                      value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-3">
               <select name="status" class="form-select bg-light border-0">
-                <option value="">Tat ca trang thai</option>
-                <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Hoat dong</option>
-                <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>Khong hoat dong</option>
+                <option value="">Tất cả trạng thái</option>
+                <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Hoat động</option>
+                <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>Không hoạt động</option>
               </select>
             </div>
             <div class="col-md-3">
               <select name="position" class="form-select bg-light border-0">
-                <option value="">Tat ca vi tri</option>
+                <option value="">Tất cả vị trí</option>
                 <?php foreach ($positions as $pos): $p = trim((string)$pos['position']); if ($p === '') { continue; } ?>
                   <option value="<?php echo htmlspecialchars($p, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $positionFilter === $p ? 'selected' : ''; ?>>
                     <?php echo htmlspecialchars($p, ENT_QUOTES, 'UTF-8'); ?>
@@ -277,8 +277,8 @@ $alertMap = [
               </select>
             </div>
             <div class="col-md-2 d-flex gap-2">
-              <button type="submit" class="btn btn-outline-primary fw-semibold">Loc</button>
-              <a href="employees.php" class="btn btn-outline-secondary fw-semibold">Reset</a>
+              <button type="submit" class="btn btn-outline-primary fw-semibold">Lọc</button>
+              <a href="employees.php" class="btn btn-outline-secondary fw-semibold">Đặt lại</a>
             </div>
           </form>
 
@@ -287,16 +287,16 @@ $alertMap = [
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem;letter-spacing:.5px;">
                   <th>Ma NV</th>
-                  <th>Ho ten</th>
-                  <th>Lien he</th>
-                  <th>Vi tri</th>
-                  <th>Trang thai</th>
-                  <th class="text-end">Thao tac</th>
+                  <th>Họ tên</th>
+                  <th>Liên hệ</th>
+                  <th>Vị trí</th>
+                  <th>Trạng thái</th>
+                  <th class="text-end">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (!$employees): ?>
-                  <tr><td colspan="6" class="text-center text-muted py-4">Khong co du lieu nhan vien.</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted py-4">Không có dữ liệu nhân viên.</td></tr>
                 <?php else: ?>
                   <?php foreach ($employees as $e): ?>
                     <tr>
@@ -314,17 +314,17 @@ $alertMap = [
                       <td><?php echo htmlspecialchars((string)($e['position'] ?? '---'), ENT_QUOTES, 'UTF-8'); ?></td>
                       <td>
                         <?php if (($e['status'] ?? '') === 'active'): ?>
-                          <span class="badge bg-success-subtle text-success border border-success-subtle">Hoat dong</span>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle">Hoat động</span>
                         <?php else: ?>
-                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Khong hoat dong</span>
+                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Không hoạt động</span>
                         <?php endif; ?>
                       </td>
                       <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="employees.php?edit=<?php echo (int)$e['id']; ?>">Sua</a>
-                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa nhan vien nay?');">
+                        <a class="btn btn-sm btn-outline-primary" href="employees.php?edit=<?php echo (int)$e['id']; ?>">Sửa</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xóa nhân viên nay?');">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="employee_id" value="<?php echo (int)$e['id']; ?>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
                         </form>
                       </td>
                     </tr>
@@ -342,3 +342,4 @@ $alertMap = [
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

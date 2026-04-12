@@ -5,7 +5,7 @@ requireAdminOrRedirect('../index.php?forbidden=1');
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'order_details';
-$pageTitle = 'Chi tiet hoa don';
+$pageTitle = 'Chi tiết hóa đơn';
 $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
 
@@ -135,11 +135,11 @@ if ($editId > 0) {
 }
 
 $alertMap = [
-    'added' => ['success', 'Da them dong chi tiet hoa don.'],
-    'updated' => ['info', 'Da cap nhat dong chi tiet hoa don.'],
-    'deleted' => ['warning', 'Da xoa dong chi tiet hoa don.'],
-    'invalid_data' => ['danger', 'Du lieu khong hop le.'],
-    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+    'added' => ['success', 'Đã thêm dòng chi tiết hóa đơn.'],
+    'updated' => ['info', 'Đã cập nhật dòng chi tiết hóa đơn.'],
+    'deleted' => ['warning', 'Đã xóa dòng chi tiết hóa đơn.'],
+    'invalid_data' => ['danger', 'Dữ liệu không hợp lệ.'],
+    'db_error' => ['danger', 'Có lỗi CSDL khi xử lý thao tác.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -168,14 +168,14 @@ $alertMap = [
     <main class="admin-content p-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 class="h4 fw-bold text-dark mb-1">Chi Tiet Hoa Don</h2>
-          <p class="text-secondary small mb-0">Quan ly cac dong san pham trong hoa don.</p>
+          <h2 class="h4 fw-bold text-dark mb-1">Chi tiết hóa đơn</h2>
+          <p class="text-secondary small mb-0">Quản lý các dòng sản phẩm trong hóa đơn.</p>
         </div>
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-6"><div class="mini-stat"><h3><?php echo $stats['lines']; ?></h3><p>Tong so dong chi tiet</p></div></div>
-        <div class="col-md-6"><div class="mini-stat"><h3>$<?php echo number_format($stats['amount'], 2); ?></h3><p>Tong gia tri chi tiet</p></div></div>
+        <div class="col-md-6"><div class="mini-stat"><h3><?php echo $stats['lines']; ?></h3><p>Tổng số dòng chi tiết</p></div></div>
+        <div class="col-md-6"><div class="mini-stat"><h3>$<?php echo number_format($stats['amount'], 2); ?></h3><p>Tổng giá trị chi tiết</p></div></div>
       </div>
 
       <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
@@ -185,7 +185,7 @@ $alertMap = [
       <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
         <div class="card-body">
           <?php if (!$orders || !$cars): ?>
-            <div class="alert alert-warning mb-0">Can co du lieu Orders va Cars truoc khi tao chi tiet hoa don.</div>
+            <div class="alert alert-warning mb-0">Cần có dữ liệu Orders và Cars trước khi tạo chi tiết hóa đơn.</div>
           <?php else: ?>
             <form method="POST" class="row g-3 align-items-end">
               <input type="hidden" name="action" value="<?php echo $editDetail ? 'edit' : 'add'; ?>">
@@ -194,9 +194,9 @@ $alertMap = [
               <?php endif; ?>
 
               <div class="col-md-3">
-                <label class="form-label small fw-bold text-secondary">Hoa don</label>
+                <label class="form-label small fw-bold text-secondary">Hóa đơn</label>
                 <select name="order_id" class="form-select bg-light border-0" required>
-                  <option value="">Chon hoa don</option>
+                  <option value="">Chọn hóa đơn</option>
                   <?php foreach ($orders as $o): ?>
                     <option value="<?php echo (int)$o['id']; ?>" <?php echo ((int)($editDetail['order_id'] ?? 0) === (int)$o['id']) ? 'selected' : ''; ?>>
                       <?php echo htmlspecialchars((string)$o['order_no'], ENT_QUOTES, 'UTF-8'); ?>
@@ -207,7 +207,7 @@ $alertMap = [
               <div class="col-md-3">
                 <label class="form-label small fw-bold text-secondary">Xe</label>
                 <select name="car_id" class="form-select bg-light border-0" required>
-                  <option value="">Chon xe</option>
+                  <option value="">Chọn xe</option>
                   <?php foreach ($cars as $c): ?>
                     <option value="<?php echo (int)$c['id']; ?>" <?php echo ((int)($editDetail['car_id'] ?? 0) === (int)$c['id']) ? 'selected' : ''; ?>>
                       <?php echo htmlspecialchars((string)$c['name'], ENT_QUOTES, 'UTF-8'); ?>
@@ -216,27 +216,27 @@ $alertMap = [
                 </select>
               </div>
               <div class="col-md-2">
-                <label class="form-label small fw-bold text-secondary">So luong</label>
+                <label class="form-label small fw-bold text-secondary">Số lượng</label>
                 <input type="number" min="1" name="quantity" class="form-control bg-light border-0" required
                        value="<?php echo htmlspecialchars((string)($editDetail['quantity'] ?? 1), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
               <div class="col-md-2">
-                <label class="form-label small fw-bold text-secondary">Don gia ($)</label>
+                <label class="form-label small fw-bold text-secondary">Đơn giá ($)</label>
                 <input type="number" min="0" step="0.01" name="unit_price" class="form-control bg-light border-0" required
                        value="<?php echo htmlspecialchars((string)($editDetail['unit_price'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
               <div class="col-md-2">
-                <label class="form-label small fw-bold text-secondary">Giam gia ($)</label>
+                <label class="form-label small fw-bold text-secondary">Giảm giá ($)</label>
                 <input type="number" min="0" step="0.01" name="discount_amount" class="form-control bg-light border-0"
                        value="<?php echo htmlspecialchars((string)($editDetail['discount_amount'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
 
               <div class="col-12 d-flex gap-2">
                 <button type="submit" class="btn btn-primary fw-bold px-4">
-                  <?php echo $editDetail ? 'Luu cap nhat' : 'Them chi tiet'; ?>
+                  <?php echo $editDetail ? 'Lưu cập nhật' : 'Thêm chi tiết'; ?>
                 </button>
                 <?php if ($editDetail): ?>
-                  <a href="order_details.php" class="btn btn-light border fw-semibold">Huy sua</a>
+                  <a href="order_details.php" class="btn btn-light border fw-semibold">Hủy sửa</a>
                 <?php endif; ?>
               </div>
             </form>
@@ -248,12 +248,12 @@ $alertMap = [
         <div class="card-body">
           <form method="GET" class="row g-2 mb-3">
             <div class="col-md-5">
-              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim theo ma HD, ten xe, khach hang..."
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tìm theo mã HĐ, tên xe, khách hàng..."
                      value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-4">
               <select name="car_id" class="form-select bg-light border-0">
-                <option value="0">Tat ca xe</option>
+                <option value="0">Tất cả xe</option>
                 <?php foreach ($cars as $c): ?>
                   <option value="<?php echo (int)$c['id']; ?>" <?php echo $carFilter === (int)$c['id'] ? 'selected' : ''; ?>>
                     <?php echo htmlspecialchars((string)$c['name'], ENT_QUOTES, 'UTF-8'); ?>
@@ -262,8 +262,8 @@ $alertMap = [
               </select>
             </div>
             <div class="col-md-3 d-flex gap-2">
-              <button type="submit" class="btn btn-outline-primary fw-semibold">Loc</button>
-              <a href="order_details.php" class="btn btn-outline-secondary fw-semibold">Reset</a>
+              <button type="submit" class="btn btn-outline-primary fw-semibold">Lọc</button>
+              <a href="order_details.php" class="btn btn-outline-secondary fw-semibold">Đặt lại</a>
             </div>
           </form>
 
@@ -271,19 +271,19 @@ $alertMap = [
             <table class="table align-middle mb-0">
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem;letter-spacing:.5px;">
-                  <th>Ma HD</th>
-                  <th>Khach hang</th>
+                  <th>Mã HĐ</th>
+                  <th>Khách hàng</th>
                   <th>Xe</th>
-                  <th>So luong</th>
-                  <th>Don gia</th>
-                  <th>Giam gia</th>
-                  <th>Thanh tien</th>
-                  <th class="text-end">Thao tac</th>
+                  <th>Số lượng</th>
+                  <th>Đơn giá</th>
+                  <th>Giảm giá</th>
+                  <th>Thành tiền</th>
+                  <th class="text-end">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (!$details): ?>
-                  <tr><td colspan="8" class="text-center text-muted py-4">Khong co dong chi tiet nao.</td></tr>
+                  <tr><td colspan="8" class="text-center text-muted py-4">Không có dòng chi tiết nào.</td></tr>
                 <?php else: ?>
                   <?php foreach ($details as $d): ?>
                     <tr>
@@ -295,11 +295,11 @@ $alertMap = [
                       <td>$<?php echo number_format((float)$d['discount_amount'], 2); ?></td>
                       <td class="fw-semibold text-primary">$<?php echo number_format((float)$d['total_price'], 2); ?></td>
                       <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="order_details.php?edit=<?php echo (int)$d['id']; ?>">Sua</a>
-                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa dong chi tiet nay?');">
+                        <a class="btn btn-sm btn-outline-primary" href="order_details.php?edit=<?php echo (int)$d['id']; ?>">Sửa</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xóa dòng chi tiết này?');">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="detail_id" value="<?php echo (int)$d['id']; ?>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
                         </form>
                       </td>
                     </tr>
@@ -317,3 +317,4 @@ $alertMap = [
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

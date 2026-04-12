@@ -26,7 +26,7 @@ if (strpos($_SERVER['SCRIPT_FILENAME'] ?? '', DIRECTORY_SEPARATOR . 'admin' . DI
     <li>
       <a href="<?php echo $adminBase; ?>index.php" class="<?php echo $adminPage === 'dashboard' ? 'active' : ''; ?>">
         <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        Dashboard
+        Tổng quan
       </a>
     </li>
     <li>
@@ -38,7 +38,7 @@ if (strpos($_SERVER['SCRIPT_FILENAME'] ?? '', DIRECTORY_SEPARATOR . 'admin' . DI
     <li>
       <a href="<?php echo $adminBase; ?>news.php" class="<?php echo $adminPage === 'news' ? 'active' : ''; ?>">
         <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 1 1-4 0V6"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8z"/></svg>
-        Tin Tức
+        Tin tức
       </a>
     </li>
     <li>
@@ -56,15 +56,9 @@ if (strpos($_SERVER['SCRIPT_FILENAME'] ?? '', DIRECTORY_SEPARATOR . 'admin' . DI
 
     <li class="sidebar-section-label">Hệ thống</li>
     <li>
-      <a href="<?php echo $adminBase; ?>customers.php" class="<?php echo $adminPage === 'customers' ? 'active' : ''; ?>">
+      <a href="<?php echo $adminBase; ?>accounts.php" class="<?php echo $adminPage === 'accounts' ? 'active' : ''; ?>">
         <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-        Khách hàng
-      </a>
-    </li>
-    <li>
-      <a href="<?php echo $adminBase; ?>employees.php" class="<?php echo $adminPage === 'employees' ? 'active' : ''; ?>">
-        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Nhân viên
+        Quản lý tài khoản
       </a>
     </li>
     <li>

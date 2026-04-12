@@ -4,7 +4,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
     <div class="topbar-title">
-      <h1><?php echo $pageTitle ?? 'Dashboard'; ?></h1>
+      <h1><?php echo $pageTitle ?? 'Tổng quan'; ?></h1>
       <p><?php echo $pageSubtitle ?? ''; ?></p>
     </div>
   </div>

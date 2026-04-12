@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
+require_once __DIR__ . '/../bootstrap/shop.php';
+require_once __DIR__ . '/../bootstrap/text.php';
 require_once __DIR__ . '/../config/database.php';
 ensureSessionStarted();
 
@@ -8,6 +10,8 @@ $currentPage = 'showroom';
 $appName = env('APP_NAME', 'FLCar');
 
 $pdo = getDBConnection();
+shopEnsureCarsStockColumn($pdo);
+$canShop = isUserLoggedIn() && currentUserRole() === 'user';
 
 // Lấy danh sách hãng xe cho dropdown
 try {
@@ -17,11 +21,11 @@ try {
 }
 
 // Xây dựng câu lệnh tìm kiếm động
-$q       = trim($_GET['q'] ?? '');
-$brandId = (int) ($_GET['brand'] ?? 0);
-$price   = $_GET['price'] ?? '';
+$q = trim($_GET['q'] ?? '');
+$brandId = (int)($_GET['brand'] ?? 0);
+$price = $_GET['price'] ?? '';
 
-$sql    = "SELECT c.*, b.name AS brand_name, cat.name AS category_name,
+$sql = "SELECT c.*, b.name AS brand_name, cat.name AS category_name,
            (SELECT image_url FROM car_images ci WHERE ci.car_id = c.id AND ci.is_cover = 1 ORDER BY ci.id ASC LIMIT 1) AS cover_image
            FROM cars c
            LEFT JOIN brands b ON c.brand_id = b.id
@@ -29,11 +33,6 @@ $sql    = "SELECT c.*, b.name AS brand_name, cat.name AS category_name,
            WHERE 1=1";
 $params = [];
 
-if ($q !== '') {
-    $sql .= " AND (c.name LIKE ? OR b.name LIKE ?)";
-    $params[] = "%$q%";
-    $params[] = "%$q%";
-}
 if ($brandId > 0) {
     $sql .= " AND c.brand_id = ?";
     $params[] = $brandId;
@@ -53,6 +52,9 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $cars = $stmt->fetchAll();
+    if ($q !== '') {
+        $cars = searchFilterRowsByKeyword($cars, ['name', 'brand_name', 'category_name'], $q);
+    }
 } catch (Exception $e) {
     $cars = [];
 }
@@ -104,9 +106,9 @@ try {
       <div class="col-lg-3 col-md-6">
         <select name="price" class="form-select" style="border-radius:var(--radius-sm);border-color:var(--border);padding:10px 14px">
           <option value="">Mức giá</option>
-          <option value="under40"  <?php echo $price === 'under40'  ? 'selected' : ''; ?>>Dưới $40,000</option>
-          <option value="40to60"   <?php echo $price === '40to60'   ? 'selected' : ''; ?>>$40,000 - $60,000</option>
-          <option value="60to100"  <?php echo $price === '60to100'  ? 'selected' : ''; ?>>$60,000 - $100,000</option>
+          <option value="under40" <?php echo $price === 'under40' ? 'selected' : ''; ?>>Dưới $40,000</option>
+          <option value="40to60" <?php echo $price === '40to60' ? 'selected' : ''; ?>>$40,000 - $60,000</option>
+          <option value="60to100" <?php echo $price === '60to100' ? 'selected' : ''; ?>>$60,000 - $100,000</option>
           <option value="above100" <?php echo $price === 'above100' ? 'selected' : ''; ?>>Trên $100,000</option>
         </select>
       </div>
@@ -141,9 +143,26 @@ try {
             <div class="card-body">
               <h5 class="fw-bold"><?php echo htmlspecialchars($car['name']); ?></h5>
               <p class="text-muted mb-2"><?php echo htmlspecialchars($car['brand_name'] ?? ''); ?> · <?php echo $car['model_year']; ?></p>
-              <div class="d-flex justify-content-between align-items-center">
+              <div class="d-flex justify-content-between align-items-center mb-2">
                 <span class="price-tag">$<?php echo number_format($car['price']); ?></span>
                 <a href="car-detail.php?id=<?php echo $car['id']; ?>" class="btn btn-dark btn-sm px-3">Chi tiết</a>
+              </div>
+              <?php
+                $stockQty = (int)($car['stock_quantity'] ?? 0);
+                $isPurchasable = ((string)($car['status'] ?? '') === 'available') && $stockQty > 0;
+              ?>
+              <div class="d-flex align-items-center justify-content-between">
+                <small class="text-secondary">Tồn kho: <strong><?php echo $stockQty; ?></strong></small>
+                <?php if (!$canShop): ?>
+                  <a href="../login.php" class="btn btn-outline-primary btn-sm">Đăng nhập để mua</a>
+                <?php elseif ($isPurchasable): ?>
+                  <div class="d-flex gap-2">
+                    <a href="cart.php?action=add&car_id=<?php echo (int)$car['id']; ?>&from=showroom" class="btn btn-outline-dark btn-sm">Thêm giỏ</a>
+                    <a href="cart.php?action=quick_buy&car_id=<?php echo (int)$car['id']; ?>" class="btn btn-primary btn-sm">Mua ngày</a>
+                  </div>
+                <?php else: ?>
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tạm hết hàng</span>
+                <?php endif; ?>
               </div>
             </div>
           </div>

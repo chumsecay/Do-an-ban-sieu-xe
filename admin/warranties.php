@@ -5,7 +5,7 @@ requireAdminOrRedirect('../index.php?forbidden=1');
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'warranties';
-$pageTitle = 'Bao hanh';
+$pageTitle = 'Bảo hành';
 $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
 
@@ -171,13 +171,13 @@ if ($editId > 0) {
 }
 
 $alertMap = [
-    'added' => ['success', 'Da tao phieu bao hanh moi.'],
-    'updated' => ['info', 'Da cap nhat phieu bao hanh.'],
-    'deleted' => ['warning', 'Da xoa phieu bao hanh.'],
-    'duplicate' => ['danger', 'Ma bao hanh da ton tai.'],
-    'invalid_data' => ['danger', 'Du lieu khong hop le.'],
-    'invalid_dates' => ['danger', 'Ngay ket thuc phai lon hon hoac bang ngay bat dau.'],
-    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+    'added' => ['success', 'Đã tạo phiếu bảo hành mới.'],
+    'updated' => ['info', 'Đã cập nhật phiếu bảo hành.'],
+    'deleted' => ['warning', 'Đã xóa phiếu bảo hành.'],
+    'duplicate' => ['danger', 'Mã bảo hành đã tồn tại.'],
+    'invalid_data' => ['danger', 'Dữ liệu không hợp lệ.'],
+    'invalid_dates' => ['danger', 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.'],
+    'db_error' => ['danger', 'Có lỗi CSDL khi xử lý thao tác.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -206,15 +206,15 @@ $alertMap = [
     <main class="admin-content p-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 class="h4 fw-bold text-dark mb-1">Quan Ly Bao Hanh</h2>
-          <p class="text-secondary small mb-0">Quan ly phieu bao hanh theo xe va khach hang.</p>
+          <h2 class="h4 fw-bold text-dark mb-1">Quản Lý Bảo Hành</h2>
+          <p class="text-secondary small mb-0">Quản lý phiếu bảo hành theo xe và khách hàng.</p>
         </div>
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tong phieu</p></div></div>
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['active']; ?></h3><p>Con hieu luc</p></div></div>
-        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['expired']; ?></h3><p>Da het han</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tổng phiếu</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['active']; ?></h3><p>Còn hiệu lực</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['expired']; ?></h3><p>Đã hết hạn</p></div></div>
       </div>
 
       <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
@@ -224,7 +224,7 @@ $alertMap = [
       <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
         <div class="card-body">
           <?php if (!$cars || !$customers): ?>
-            <div class="alert alert-warning mb-0">Can co du lieu Cars va Customers truoc khi tao bao hanh.</div>
+            <div class="alert alert-warning mb-0">Cần có dữ liệu Cars và Customers trước khi tạo bảo hành.</div>
           <?php else: ?>
             <form method="POST" class="row g-3 align-items-end">
               <input type="hidden" name="action" value="<?php echo $editWarranty ? 'edit' : 'add'; ?>">
@@ -239,9 +239,9 @@ $alertMap = [
                        value="<?php echo htmlspecialchars((string)($editWarranty['warranty_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
               <div class="col-md-2">
-                <label class="form-label small fw-bold text-secondary">Hoa don (tuy chon)</label>
+                <label class="form-label small fw-bold text-secondary">Hóa đơn (tùy chọn)</label>
                 <select name="order_id" class="form-select bg-light border-0">
-                  <option value="0">Khong gan hoa don</option>
+                  <option value="0">Không gắn hóa đơn</option>
                   <?php foreach ($orders as $o): ?>
                     <option value="<?php echo (int)$o['id']; ?>" <?php echo ((int)($editWarranty['order_id'] ?? 0) === (int)$o['id']) ? 'selected' : ''; ?>>
                       <?php echo htmlspecialchars((string)$o['order_no'], ENT_QUOTES, 'UTF-8'); ?>
@@ -252,7 +252,7 @@ $alertMap = [
               <div class="col-md-3">
                 <label class="form-label small fw-bold text-secondary">Xe</label>
                 <select name="car_id" class="form-select bg-light border-0" required>
-                  <option value="">Chon xe</option>
+                  <option value="">Chọn xe</option>
                   <?php foreach ($cars as $c): ?>
                     <option value="<?php echo (int)$c['id']; ?>" <?php echo ((int)($editWarranty['car_id'] ?? 0) === (int)$c['id']) ? 'selected' : ''; ?>>
                       <?php echo htmlspecialchars((string)$c['name'], ENT_QUOTES, 'UTF-8'); ?>
@@ -261,9 +261,9 @@ $alertMap = [
                 </select>
               </div>
               <div class="col-md-3">
-                <label class="form-label small fw-bold text-secondary">Khach hang</label>
+                <label class="form-label small fw-bold text-secondary">Khách hàng</label>
                 <select name="customer_id" class="form-select bg-light border-0" required>
-                  <option value="">Chon khach hang</option>
+                  <option value="">Chon khách hàng</option>
                   <?php foreach ($customers as $c): ?>
                     <option value="<?php echo (int)$c['id']; ?>" <?php echo ((int)($editWarranty['customer_id'] ?? 0) === (int)$c['id']) ? 'selected' : ''; ?>>
                       <?php echo htmlspecialchars((string)$c['full_name'], ENT_QUOTES, 'UTF-8'); ?>
@@ -272,34 +272,34 @@ $alertMap = [
                 </select>
               </div>
               <div class="col-md-2">
-                <label class="form-label small fw-bold text-secondary">Trang thai</label>
+                <label class="form-label small fw-bold text-secondary">Trạng thái</label>
                 <select name="status" class="form-select bg-light border-0">
-                  <option value="active" <?php echo (!$editWarranty || ($editWarranty['status'] ?? '') === 'active') ? 'selected' : ''; ?>>Con hieu luc</option>
-                  <option value="expired" <?php echo (($editWarranty['status'] ?? '') === 'expired') ? 'selected' : ''; ?>>Da het han</option>
-                  <option value="void" <?php echo (($editWarranty['status'] ?? '') === 'void') ? 'selected' : ''; ?>>Vo hieu</option>
+                  <option value="active" <?php echo (!$editWarranty || ($editWarranty['status'] ?? '') === 'active') ? 'selected' : ''; ?>>Còn hiệu lực</option>
+                  <option value="expired" <?php echo (($editWarranty['status'] ?? '') === 'expired') ? 'selected' : ''; ?>>Đã hết hạn</option>
+                  <option value="void" <?php echo (($editWarranty['status'] ?? '') === 'void') ? 'selected' : ''; ?>>Vô hiệu</option>
                 </select>
               </div>
 
               <div class="col-md-3">
-                <label class="form-label small fw-bold text-secondary">Ngay bat dau</label>
+                <label class="form-label small fw-bold text-secondary">Ngày bắt đầu</label>
                 <input type="date" name="start_date" class="form-control bg-light border-0" required
                        value="<?php echo htmlspecialchars((string)($editWarranty['start_date'] ?? date('Y-m-d')), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
               <div class="col-md-3">
-                <label class="form-label small fw-bold text-secondary">Ngay ket thuc</label>
+                <label class="form-label small fw-bold text-secondary">Ngày kết thúc</label>
                 <input type="date" name="end_date" class="form-control bg-light border-0" required
                        value="<?php echo htmlspecialchars((string)($editWarranty['end_date'] ?? date('Y-m-d', strtotime('+3 years'))), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
               <div class="col-md-6">
-                <label class="form-label small fw-bold text-secondary">Dieu khoan bao hanh</label>
+                <label class="form-label small fw-bold text-secondary">Dieu khoan bảo hành</label>
                 <input type="text" name="terms" class="form-control bg-light border-0" placeholder="Ghi chu / dieu khoan"
                        value="<?php echo htmlspecialchars((string)($editWarranty['terms'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
               </div>
 
               <div class="col-12 d-flex gap-2">
-                <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editWarranty ? 'Luu cap nhat' : 'Tao phieu bao hanh'; ?></button>
+                <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editWarranty ? 'Lưu cập nhật' : 'Tạo phiếu bảo hành'; ?></button>
                 <?php if ($editWarranty): ?>
-                  <a href="warranties.php" class="btn btn-light border fw-semibold">Huy sua</a>
+                  <a href="warranties.php" class="btn btn-light border fw-semibold">Hủy sửa</a>
                 <?php endif; ?>
               </div>
             </form>
@@ -311,20 +311,20 @@ $alertMap = [
         <div class="card-body">
           <form method="GET" class="row g-2 mb-3">
             <div class="col-md-5">
-              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim ma BH, ma HD, xe, khach hang..."
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tìm mã BH, mã HĐ, xe, khách hàng..."
                      value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-md-4">
               <select name="status" class="form-select bg-light border-0">
-                <option value="">Tat ca trang thai</option>
-                <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Con hieu luc</option>
-                <option value="expired" <?php echo $statusFilter === 'expired' ? 'selected' : ''; ?>>Da het han</option>
-                <option value="void" <?php echo $statusFilter === 'void' ? 'selected' : ''; ?>>Vo hieu</option>
+                <option value="">Tất cả trạng thái</option>
+                <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Còn hiệu lực</option>
+                <option value="expired" <?php echo $statusFilter === 'expired' ? 'selected' : ''; ?>>Đã hết hạn</option>
+                <option value="void" <?php echo $statusFilter === 'void' ? 'selected' : ''; ?>>Vô hiệu</option>
               </select>
             </div>
             <div class="col-md-3 d-flex gap-2">
-              <button type="submit" class="btn btn-outline-primary fw-semibold">Loc</button>
-              <a href="warranties.php" class="btn btn-outline-secondary fw-semibold">Reset</a>
+              <button type="submit" class="btn btn-outline-primary fw-semibold">Lọc</button>
+              <a href="warranties.php" class="btn btn-outline-secondary fw-semibold">Đặt lại</a>
             </div>
           </form>
 
@@ -333,17 +333,17 @@ $alertMap = [
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem;letter-spacing:.5px;">
                   <th>Ma BH</th>
-                  <th>Khach hang</th>
+                  <th>Khách hàng</th>
                   <th>Xe</th>
                   <th>Ma HD</th>
-                  <th>Hieu luc</th>
-                  <th>Trang thai</th>
-                  <th class="text-end">Thao tac</th>
+                  <th>Hiệu lực</th>
+                  <th>Trạng thái</th>
+                  <th class="text-end">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (!$warranties): ?>
-                  <tr><td colspan="7" class="text-center text-muted py-4">Khong co du lieu bao hanh.</td></tr>
+                  <tr><td colspan="7" class="text-center text-muted py-4">Không có dữ liệu bảo hành.</td></tr>
                 <?php else: ?>
                   <?php foreach ($warranties as $w): ?>
                     <tr>
@@ -357,19 +357,19 @@ $alertMap = [
                       <td><?php echo htmlspecialchars((string)$w['start_date'], ENT_QUOTES, 'UTF-8'); ?> -> <?php echo htmlspecialchars((string)$w['end_date'], ENT_QUOTES, 'UTF-8'); ?></td>
                       <td>
                         <?php if (($w['status'] ?? '') === 'active'): ?>
-                          <span class="badge bg-success-subtle text-success border border-success-subtle">Con hieu luc</span>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle">Còn hiệu lực</span>
                         <?php elseif (($w['status'] ?? '') === 'expired'): ?>
                           <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Het han</span>
                         <?php else: ?>
-                          <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Vo hieu</span>
+                          <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Vô hiệu</span>
                         <?php endif; ?>
                       </td>
                       <td class="text-end">
-                        <a class="btn btn-sm btn-outline-primary" href="warranties.php?edit=<?php echo (int)$w['id']; ?>">Sua</a>
-                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa phieu bao hanh nay?');">
+                        <a class="btn btn-sm btn-outline-primary" href="warranties.php?edit=<?php echo (int)$w['id']; ?>">Sửa</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xóa phiếu bảo hành này?');">
                           <input type="hidden" name="action" value="delete">
                           <input type="hidden" name="warranty_id" value="<?php echo (int)$w['id']; ?>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
                         </form>
                       </td>
                     </tr>
@@ -387,3 +387,4 @@ $alertMap = [
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

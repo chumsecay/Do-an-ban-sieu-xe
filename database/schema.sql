@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS orders (
   unit_price DECIMAL(15,2) NOT NULL,
   total_amount DECIMAL(15,2) NOT NULL,
   currency CHAR(3) NOT NULL DEFAULT 'USD',
-  status ENUM('pending','confirmed','cancelled','completed') NOT NULL DEFAULT 'pending',
+  status ENUM('pending','confirmed','processing','shipping','delivered','completed','cancelled','refunded') NOT NULL DEFAULT 'pending',
   payment_status ENUM('unpaid','deposit_paid','paid','refunded') NOT NULL DEFAULT 'unpaid',
   deposit_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
   order_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -154,8 +154,8 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE TABLE IF NOT EXISTS order_status_logs (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   order_id BIGINT UNSIGNED NOT NULL,
-  old_status ENUM('pending','confirmed','cancelled','completed') NULL,
-  new_status ENUM('pending','confirmed','cancelled','completed') NOT NULL,
+  old_status ENUM('pending','confirmed','processing','shipping','delivered','completed','cancelled','refunded') NULL,
+  new_status ENUM('pending','confirmed','processing','shipping','delivered','completed','cancelled','refunded') NOT NULL,
   changed_by_admin_id BIGINT UNSIGNED NULL,
   changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   note VARCHAR(255) NULL,
@@ -252,9 +252,9 @@ CREATE TABLE IF NOT EXISTS app_settings (
 -- Optional bootstrap values
 INSERT IGNORE INTO app_settings (setting_key, setting_value, description)
 VALUES
-('APP_NAME', 'FLCar', 'Tên website/app'),
-('CONTACT_EMAIL', 'info@flcar.vn', 'Email liên h? chính'),
-('CONTACT_PHONE', '0900 000 000', 'Hotline liên h? chính');
+('APP_NAME', 'FLCar', 'Ten website/app'),
+('CONTACT_EMAIL', 'info@flcar.vn', 'Email lien he chinh'),
+('CONTACT_PHONE', '0900 000 000', 'Hotline lien he chinh');
 
 
 -- =========================

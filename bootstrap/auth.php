@@ -82,10 +82,14 @@ if (!function_exists('loginAsUser')) {
     {
         ensureSessionStarted();
 
+        $customerId = 0;
+        $balance = 0.0;
         if (is_array($nameOrUser)) {
             $name = (string)($nameOrUser['full_name'] ?? $nameOrUser['name'] ?? $nameOrUser['email'] ?? 'User');
             $email = (string)($nameOrUser['email'] ?? $email ?? '');
             $_SESSION['user_id'] = (int)($nameOrUser['id'] ?? 0);
+            $customerId = (int)($nameOrUser['id'] ?? 0);
+            $balance = (float)($nameOrUser['balance'] ?? 0);
         } else {
             $name = $nameOrUser !== '' ? $nameOrUser : (string)($email ?? 'User');
             $email = (string)($email ?? '');
@@ -97,6 +101,8 @@ if (!function_exists('loginAsUser')) {
         $_SESSION['user_email'] = $email;
         $_SESSION['auth_provider'] = $provider;
         $_SESSION['display_name'] = $name;
+        $_SESSION['customer_id'] = $customerId;
+        $_SESSION['user_balance'] = $balance;
 
         $_SESSION['is_admin_logged_in'] = false;
         unset($_SESSION['admin_id'], $_SESSION['admin_name'], $_SESSION['admin_role']);

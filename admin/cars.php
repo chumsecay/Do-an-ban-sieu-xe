@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
 requireAdminOrRedirect('../index.php?forbidden=1');
+require_once __DIR__ . '/../bootstrap/text.php';
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'cars';
@@ -468,10 +469,6 @@ if ($filterPriceMin !== null && $filterPriceMax !== null && $filterPriceMin > $f
 }
 $where = ['1=1'];
 $params = [];
-if ($filterQ !== '') {
-    $where[] = '(c.code LIKE :q OR c.name LIKE :q OR b.name LIKE :q OR cat.name LIKE :q)';
-    $params[':q'] = '%' . $filterQ . '%';
-}
 if ($filterStatus !== '') {
     $where[] = 'c.status = :status';
     $params[':status'] = $filterStatus;
@@ -514,6 +511,9 @@ try {
     $carsStmt = $pdo->prepare($carsSql);
     $carsStmt->execute($params);
     $cars = $carsStmt->fetchAll();
+    if ($filterQ !== '') {
+        $cars = searchFilterRowsByKeyword($cars, ['code', 'name', 'brand_name', 'category_name'], $filterQ);
+    }
 
     $brands = $pdo->query('SELECT * FROM brands ORDER BY name ASC')->fetchAll();
     $categories = $pdo->query('SELECT * FROM car_categories ORDER BY name ASC')->fetchAll();
@@ -548,27 +548,27 @@ try {
 }
 
 $alertMap = [
-    'car_added' => ['success', 'Da them xe moi.'],
-    'car_added_with_image' => ['success', 'Da them xe moi va da gan anh.'],
-    'car_deleted' => ['warning', 'Da xoa xe.'],
-    'car_delete_blocked' => ['danger', 'Khong the xoa xe nay vi da phat sinh du lieu lien quan (don hang/bao hanh/chi tiet don/inquiry).'],
-    'car_invalid_name' => ['danger', 'Ten xe khong hop le.'],
-    'car_missing_brand_or_category' => ['danger', 'Hay nhap day du hang xe va dong xe.'],
-    'car_invalid_data' => ['danger', 'Du lieu xe khong hop le.'],
-    'car_invalid_image_url' => ['danger', 'Link anh khong hop le.'],
-    'car_upload_failed' => ['danger', 'Upload anh that bai.'],
-    'car_too_large' => ['danger', 'Anh upload vuot qua 5MB.'],
-    'car_invalid_type' => ['danger', 'File anh khong dung dinh dang cho phep.'],
-    'car_dir_unavailable' => ['danger', 'Khong tao duoc thu muc uploads/cars.'],
-    'car_dir_not_writable' => ['danger', 'Thu muc uploads/cars khong co quyen ghi.'],
-    'car_move_failed' => ['danger', 'Khong luu duoc file anh.'],
-    'brand_added' => ['success', 'Da them hang xe moi.'],
-    'brand_updated' => ['info', 'Da cap nhat hang xe.'],
-    'brand_deleted' => ['warning', 'Da xoa hang xe.'],
-    'brand_invalid_name' => ['danger', 'Ten hang khong hop le.'],
-    'brand_invalid_data' => ['danger', 'Du lieu hang xe khong hop le.'],
-    'brand_delete_blocked' => ['danger', 'Khong the xoa hang vi dang co xe su dung.'],
-    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+    'car_added' => ['success', 'Đã thêm xe mới.'],
+    'car_added_with_image' => ['success', 'Đã thêm xe mới và đã gắn ảnh.'],
+    'car_deleted' => ['warning', 'Đã xóa xe.'],
+    'car_delete_blocked' => ['danger', 'Không thể xóa xe này vì đã phát sinh dữ liệu liên quan (đơn hàng/bảo hành/chi tiết đơn/inquiry).'],
+    'car_invalid_name' => ['danger', 'Tên xe không hợp lệ.'],
+    'car_missing_brand_or_category' => ['danger', 'Hãy nhập đầy đủ hãng xe và dòng xe.'],
+    'car_invalid_data' => ['danger', 'Dữ liệu xe không hợp lệ.'],
+    'car_invalid_image_url' => ['danger', 'Link ảnh không hợp lệ.'],
+    'car_upload_failed' => ['danger', 'Upload ảnh thất bại.'],
+    'car_too_large' => ['danger', 'Ảnh upload vượt quá 5MB.'],
+    'car_invalid_type' => ['danger', 'File ảnh không đúng định dạng cho phép.'],
+    'car_dir_unavailable' => ['danger', 'Không tạo được thư mục uploads/cars.'],
+    'car_dir_not_writable' => ['danger', 'Thư mục uploads/cars không có quyền ghi.'],
+    'car_move_failed' => ['danger', 'Không lưu được file ảnh.'],
+    'brand_added' => ['success', 'Đã thêm hãng xe mới.'],
+    'brand_updated' => ['info', 'Đã cập nhật hãng xe.'],
+    'brand_deleted' => ['warning', 'Đã xóa hãng xe.'],
+    'brand_invalid_name' => ['danger', 'Tên hãng không hợp lệ.'],
+    'brand_invalid_data' => ['danger', 'Dữ liệu hãng xe không hợp lệ.'],
+    'brand_delete_blocked' => ['danger', 'Không thể xóa hãng vì đang có xe sử dụng.'],
+    'db_error' => ['danger', 'Có lỗi CSDL khi xử lý thao tác.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -576,7 +576,7 @@ $alertMap = [
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quan ly xe va hang - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?> Admin</title>
+<title>Quản lý xe và hãng - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?> Admin</title>
 <link rel="icon" href="../img/logo.png" type="image/png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -607,19 +607,19 @@ $alertMap = [
     <main class="admin-content p-4">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
-          <h2 class="h4 fw-bold text-dark mb-1">Quan ly xe va hang xe</h2>
-          <p class="text-secondary small mb-0">Them/sua/xoa xe, quan ly hang xe, loc thong tin xe va them hinh qua CDN URL hoac upload.</p>
+          <h2 class="h4 fw-bold text-dark mb-1">Quản lý xe và hãng xe</h2>
+          <p class="text-secondary small mb-0">Thêm/sửa/xóa xe, quản lý hãng xe, lọc thông tin xe và thêm hình qua CDN URL hoặc upload.</p>
         </div>
         <button class="btn btn-primary fw-bold px-4 rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#addCarModal">
-          <i class="bi bi-plus-circle me-1"></i> Them xe moi
+          <i class="bi bi-plus-circle me-1"></i> Thêm xe mới
         </button>
       </div>
 
       <div class="row g-3 mb-4">
-        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['cars_total']; ?></h3><p>Tong so xe</p></div></div>
-        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['cars_available']; ?></h3><p>San hang</p></div></div>
-        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['cars_reserved']; ?></h3><p>Dang dat coc</p></div></div>
-        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['brands_total']; ?></h3><p>So hang xe</p></div></div>
+        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['cars_total']; ?></h3><p>Tổng số xe</p></div></div>
+        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['cars_available']; ?></h3><p>Sẵn hàng</p></div></div>
+        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['cars_reserved']; ?></h3><p>Đang đặt cọc</p></div></div>
+        <div class="col-md-3 col-6"><div class="mini-stat"><h3><?php echo $stats['brands_total']; ?></h3><p>Số hãng xe</p></div></div>
       </div>
 
       <?php if ($msg !== '' && isset($alertMap[$msg])): $alert = $alertMap[$msg]; ?>
@@ -630,55 +630,55 @@ $alertMap = [
         <div class="card-body">
           <form method="GET" class="row g-2 align-items-end">
             <div class="col-lg-3 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Tu khoa</label>
-              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Ma xe, ten xe, hang, dong xe..." value="<?php echo htmlspecialchars($filterQ, ENT_QUOTES, 'UTF-8'); ?>">
+              <label class="form-label text-secondary small fw-bold">Từ khóa</label>
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Mã xe, tên xe, hãng, dòng xe..." value="<?php echo htmlspecialchars($filterQ, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-lg-2 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Trang thai</label>
+              <label class="form-label text-secondary small fw-bold">Trạng thái</label>
               <select name="status" class="form-select bg-light border-0">
-                <option value="">Tat ca</option>
-                <option value="available" <?php echo $filterStatus === 'available' ? 'selected' : ''; ?>>San hang</option>
-                <option value="reserved" <?php echo $filterStatus === 'reserved' ? 'selected' : ''; ?>>Dat coc</option>
-                <option value="sold" <?php echo $filterStatus === 'sold' ? 'selected' : ''; ?>>Da ban</option>
+                <option value="">Tất cả</option>
+                <option value="available" <?php echo $filterStatus === 'available' ? 'selected' : ''; ?>>Sẵn hàng</option>
+                <option value="reserved" <?php echo $filterStatus === 'reserved' ? 'selected' : ''; ?>>Đặt cọc</option>
+                <option value="sold" <?php echo $filterStatus === 'sold' ? 'selected' : ''; ?>>Đã bán</option>
               </select>
             </div>
             <div class="col-lg-2 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Hang xe</label>
+              <label class="form-label text-secondary small fw-bold">Hãng xe</label>
               <select name="brand" class="form-select bg-light border-0">
-                <option value="">Tat ca hang</option>
+                <option value="">Tất cả hãng</option>
                 <?php foreach ($brands as $b): ?>
                   <option value="<?php echo (int)$b['id']; ?>" <?php echo $filterBrand === (int)$b['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars((string)$b['name'], ENT_QUOTES, 'UTF-8'); ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class="col-lg-2 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Dong xe</label>
+              <label class="form-label text-secondary small fw-bold">Dòng xe</label>
               <select name="category" class="form-select bg-light border-0">
-                <option value="">Tat ca dong</option>
+                <option value="">Tất cả dòng</option>
                 <?php foreach ($categories as $cat): ?>
                   <option value="<?php echo (int)$cat['id']; ?>" <?php echo $filterCategory === (int)$cat['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class="col-lg-1 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Nam tu</label>
+              <label class="form-label text-secondary small fw-bold">Năm từ</label>
               <input type="number" name="year_from" class="form-control bg-light border-0" value="<?php echo $filterYearFrom !== null ? (int)$filterYearFrom : ''; ?>">
             </div>
             <div class="col-lg-1 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Nam den</label>
+              <label class="form-label text-secondary small fw-bold">Năm đến</label>
               <input type="number" name="year_to" class="form-control bg-light border-0" value="<?php echo $filterYearTo !== null ? (int)$filterYearTo : ''; ?>">
             </div>
             <div class="col-lg-2 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Gia tu ($)</label>
+              <label class="form-label text-secondary small fw-bold">Giá từ ($)</label>
               <input type="number" step="0.01" min="0" name="price_min" class="form-control bg-light border-0" value="<?php echo $filterPriceMin !== null ? htmlspecialchars((string)$filterPriceMin, ENT_QUOTES, 'UTF-8') : ''; ?>">
             </div>
             <div class="col-lg-2 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Gia den ($)</label>
+              <label class="form-label text-secondary small fw-bold">Giá đến ($)</label>
               <input type="number" step="0.01" min="0" name="price_max" class="form-control bg-light border-0" value="<?php echo $filterPriceMax !== null ? htmlspecialchars((string)$filterPriceMax, ENT_QUOTES, 'UTF-8') : ''; ?>">
             </div>
             <div class="col-lg-4 col-md-12 d-flex gap-2">
-              <button type="submit" class="btn btn-outline-primary fw-semibold"><i class="bi bi-funnel me-1"></i> Loc du lieu</button>
-              <a href="cars.php" class="btn btn-outline-secondary fw-semibold">Xoa loc</a>
+              <button type="submit" class="btn btn-outline-primary fw-semibold"><i class="bi bi-funnel me-1"></i> Lọc dữ liệu</button>
+              <a href="cars.php" class="btn btn-outline-secondary fw-semibold">Xóa lọc</a>
             </div>
           </form>
         </div>
@@ -689,20 +689,20 @@ $alertMap = [
             <table class="table align-middle mb-0">
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size: 0.75rem; letter-spacing: 0.5px;">
-                  <th class="ps-4">Ma xe</th>
+                  <th class="ps-4">Mã xe</th>
                   <th>Xe</th>
-                  <th>Hang</th>
-                  <th>Dong</th>
-                  <th>Nam</th>
-                  <th>Gia</th>
-                  <th>So luong</th>
-                  <th>Trang thai</th>
-                  <th class="text-end pe-4">Thao tac</th>
+                  <th>Hãng</th>
+                  <th>Dòng</th>
+                  <th>Năm</th>
+                  <th>Giá</th>
+                  <th>Số lượng</th>
+                  <th>Trạng thái</th>
+                  <th class="text-end pe-4">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (count($cars) === 0): ?>
-                  <tr><td colspan="9" class="text-center py-5 text-muted">Khong co xe nao phu hop bo loc.</td></tr>
+                  <tr><td colspan="9" class="text-center py-5 text-muted">Không có xe nào phù hợp bộ lọc.</td></tr>
                 <?php else: ?>
                   <?php foreach ($cars as $c):
                     $imgSrc = !empty($c['cover_image']) ? htmlspecialchars((string)$c['cover_image'], ENT_QUOTES, 'UTF-8') : '../img/bmwx5.jpg';
@@ -722,19 +722,19 @@ $alertMap = [
                     <td class="fw-semibold"><?php echo (int)($c['stock_quantity'] ?? 0); ?></td>
                     <td>
                       <?php if ($c['status'] === 'sold'): ?>
-                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Da ban</span>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Đã bán</span>
                       <?php elseif ($c['status'] === 'reserved'): ?>
-                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Dat coc</span>
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Đặt cọc</span>
                       <?php else: ?>
-                        <span class="badge bg-success-subtle text-success border border-success-subtle">San hang</span>
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Sẵn hàng</span>
                       <?php endif; ?>
                     </td>
                     <td class="text-end pe-4">
-                      <a href="car-edit.php?id=<?php echo (int)$c['id']; ?>" class="btn-action edit">Sua</a>
-                      <form method="POST" class="d-inline" onsubmit="return confirm('Ban chac chan muon xoa xe nay?');">
+                      <a href="car-edit.php?id=<?php echo (int)$c['id']; ?>" class="btn-action edit">Sửa</a>
+                      <form method="POST" class="d-inline" onsubmit="return confirm('Bạn chắc chắn muốn xóa xe này?');">
                         <input type="hidden" name="action" value="delete_car">
                         <input type="hidden" name="car_id" value="<?php echo (int)$c['id']; ?>">
-                        <button type="submit" class="btn-action delete">Xoa</button>
+                        <button type="submit" class="btn-action delete">Xóa</button>
                       </form>
                     </td>
                   </tr>
@@ -750,8 +750,8 @@ $alertMap = [
         <div class="card-body">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
             <div>
-              <h5 class="mb-1 fw-bold">Quan ly hang xe</h5>
-              <p class="text-secondary small mb-0">Them, sua, xoa hang xe ngay tai trang quan ly xe.</p>
+              <h5 class="mb-1 fw-bold">Quản lý hãng xe</h5>
+              <p class="text-secondary small mb-0">Thêm, sửa, xóa hãng xe ngày tại trang quản lý xe.</p>
             </div>
           </div>
 
@@ -762,27 +762,27 @@ $alertMap = [
             <?php endif; ?>
 
             <div class="col-lg-4 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Ten hang</label>
+              <label class="form-label text-secondary small fw-bold">Tên hãng</label>
               <input type="text" name="brand_name" class="form-control bg-light border-0" required value="<?php echo htmlspecialchars((string)($editingBrand['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-lg-3 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Slug (tuy chon)</label>
+              <label class="form-label text-secondary small fw-bold">Slug (tùy chọn)</label>
               <input type="text" name="brand_slug" class="form-control bg-light border-0" value="<?php echo htmlspecialchars((string)($editingBrand['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-lg-3 col-md-6">
-              <label class="form-label text-secondary small fw-bold">Quoc gia</label>
+              <label class="form-label text-secondary small fw-bold">Quốc gia</label>
               <input type="text" name="brand_country" class="form-control bg-light border-0" value="<?php echo htmlspecialchars((string)($editingBrand['country'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div class="col-lg-2 col-md-6">
               <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" name="brand_is_active" id="brandActiveCheck" <?php echo $editingBrand ? ((int)$editingBrand['is_active'] === 1 ? 'checked' : '') : 'checked'; ?>>
-                <label class="form-check-label small fw-semibold" for="brandActiveCheck">Dang hoat dong</label>
+                <label class="form-check-label small fw-semibold" for="brandActiveCheck">Đang hoạt động</label>
               </div>
             </div>
             <div class="col-12 d-flex gap-2">
-              <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editingBrand ? 'Luu cap nhat hang' : 'Them hang moi'; ?></button>
+              <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editingBrand ? 'Lưu cập nhật hãng' : 'Thêm hãng mới'; ?></button>
               <?php if ($editingBrand): ?>
-                <a href="cars.php#brands-section" class="btn btn-light border fw-semibold">Huy sua</a>
+                <a href="cars.php#brands-section" class="btn btn-light border fw-semibold">Hủy sửa</a>
               <?php endif; ?>
             </div>
           </form>
@@ -790,17 +790,17 @@ $alertMap = [
             <table class="table align-middle mb-0">
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem; letter-spacing:.5px;">
-                  <th>Ten hang</th>
+                  <th>Tên hãng</th>
                   <th>Slug</th>
-                  <th>Quoc gia</th>
-                  <th>So xe</th>
-                  <th>Trang thai</th>
-                  <th class="text-end">Thao tac</th>
+                  <th>Quốc gia</th>
+                  <th>Số xe</th>
+                  <th>Trạng thái</th>
+                  <th class="text-end">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (!$brandRows): ?>
-                  <tr><td colspan="6" class="text-center text-muted py-4">Chua co du lieu hang xe.</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted py-4">Chưa có dữ liệu hãng xe.</td></tr>
                 <?php else: ?>
                   <?php foreach ($brandRows as $b): ?>
                     <tr>
@@ -810,17 +810,17 @@ $alertMap = [
                       <td><?php echo (int)$b['car_count']; ?></td>
                       <td>
                         <?php if ((int)$b['is_active'] === 1): ?>
-                          <span class="badge bg-success-subtle text-success border border-success-subtle">Hoat dong</span>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle">Hoạt động</span>
                         <?php else: ?>
-                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tam dung</span>
+                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tạm dừng</span>
                         <?php endif; ?>
                       </td>
                       <td class="text-end">
-                        <a href="cars.php?brand_edit=<?php echo (int)$b['id']; ?>#brands-section" class="btn btn-sm btn-outline-primary">Sua</a>
-                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa hang nay?');">
+                        <a href="cars.php?brand_edit=<?php echo (int)$b['id']; ?>#brands-section" class="btn btn-sm btn-outline-primary">Sửa</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xóa hãng này?');">
                           <input type="hidden" name="action" value="delete_brand">
                           <input type="hidden" name="brand_id" value="<?php echo (int)$b['id']; ?>">
-                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
                         </form>
                       </td>
                     </tr>
@@ -842,30 +842,30 @@ $alertMap = [
       <form method="POST" enctype="multipart/form-data">
         <input type="hidden" name="action" value="add_car">
         <div class="modal-header border-0 pb-0 pt-4 px-4">
-          <h5 class="modal-title fw-bold text-dark">Them xe moi</h5>
+          <h5 class="modal-title fw-bold text-dark">Thêm xe mới</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body px-4">
           <div class="row g-3">
             <div class="col-md-8">
-              <label class="form-label text-secondary small fw-bold">Ten model xe</label>
+              <label class="form-label text-secondary small fw-bold">Tên model xe</label>
               <input type="text" name="name" class="form-control bg-light border-0" required>
             </div>
             <div class="col-md-4">
-              <label class="form-label text-secondary small fw-bold">Nam san xuat</label>
+              <label class="form-label text-secondary small fw-bold">Năm sản xuất</label>
               <input type="number" name="year" class="form-control bg-light border-0" value="<?php echo date('Y'); ?>" required>
             </div>
             <div class="col-md-3">
-              <label class="form-label text-secondary small fw-bold">Gia niem yet ($)</label>
+              <label class="form-label text-secondary small fw-bold">Giá niêm yết ($)</label>
               <input type="number" name="price" min="0" step="0.01" class="form-control bg-light border-0" value="0" required>
             </div>
             <div class="col-md-3">
-              <label class="form-label text-secondary small fw-bold">So luong ton</label>
+              <label class="form-label text-secondary small fw-bold">Số lượng tồn</label>
               <input type="number" name="stock_quantity" min="0" step="1" class="form-control bg-light border-0" value="1" required>
             </div>
             <div class="col-md-3">
-              <label class="form-label text-secondary small fw-bold">Hang xe (go de tim / them moi)</label>
-              <input type="text" name="brand_input" class="form-control bg-light border-0" list="brandOptions" placeholder="Vi du: Rolls-Royce, BMW..." required>
+              <label class="form-label text-secondary small fw-bold">Hãng xe (gõ để tìm / thêm mới)</label>
+              <input type="text" name="brand_input" class="form-control bg-light border-0" list="brandOptions" placeholder="Ví dụ: Rolls-Royce, BMW..." required>
               <datalist id="brandOptions">
                 <?php foreach ($brands as $b): ?>
                   <option value="<?php echo htmlspecialchars((string)$b['name'], ENT_QUOTES, 'UTF-8'); ?>"></option>
@@ -873,8 +873,8 @@ $alertMap = [
               </datalist>
             </div>
             <div class="col-md-3">
-              <label class="form-label text-secondary small fw-bold">Dong xe (go de tim / them moi)</label>
-              <input type="text" name="category_input" class="form-control bg-light border-0" list="categoryOptions" placeholder="Vi du: Sedan, SUV, Coupe..." required>
+              <label class="form-label text-secondary small fw-bold">Dòng xe (gõ để tìm / thêm mới)</label>
+              <input type="text" name="category_input" class="form-control bg-light border-0" list="categoryOptions" placeholder="Ví dụ: Sedan, SUV, Coupe..." required>
               <datalist id="categoryOptions">
                 <?php foreach ($categories as $cat): ?>
                   <option value="<?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>"></option>
@@ -882,36 +882,36 @@ $alertMap = [
               </datalist>
             </div>
             <div class="col-md-4">
-              <label class="form-label text-secondary small fw-bold">Trang thai xe</label>
+              <label class="form-label text-secondary small fw-bold">Trạng thái xe</label>
               <select name="status" class="form-select bg-light border-0">
-                <option value="available">San hang</option>
-                <option value="reserved">Dat coc</option>
-                <option value="sold">Da ban</option>
+                <option value="available">Sẵn hàng</option>
+                <option value="reserved">Đặt cọc</option>
+                <option value="sold">Đã bán</option>
               </select>
             </div>
             <div class="col-12">
-              <small class="text-muted">Dong xe la phan loai xe (kieu dang/phan khuc), vi du: Sedan, SUV, Coupe, Hatchback, Pickup...</small>
+              <small class="text-muted">Dòng xe là phân loại xe (kiểu dáng/phân khúc), ví dụ: Sedan, SUV, Coupe, Hatchback, Pickup...</small>
             </div>
             <div class="col-md-8">
-              <label class="form-label text-secondary small fw-bold">Link anh CDN (tuy chon)</label>
+              <label class="form-label text-secondary small fw-bold">Link ảnh CDN (tùy chọn)</label>
               <input type="url" name="image_url" class="form-control bg-light border-0" placeholder="https://cdn.example.com/car.jpg">
             </div>
             <div class="col-md-4">
-              <label class="form-label text-secondary small fw-bold">Hoac upload anh</label>
+              <label class="form-label text-secondary small fw-bold">Hoặc upload ảnh</label>
               <input type="file" name="image_file" class="form-control bg-light border-0" accept="image/*">
             </div>
             <div class="col-12">
-              <small class="text-muted">Ban co the dung URL CDN hoac upload file anh. Neu nhap ca hai, he thong uu tien file upload.</small>
+              <small class="text-muted">Bạn có thể dùng URL CDN hoặc upload file ảnh. Nếu nhập cả hai, hệ thống ưu tiên file upload.</small>
             </div>
             <div class="col-12">
-              <label class="form-label text-secondary small fw-bold">Mo ta xe</label>
-              <textarea name="description" class="form-control bg-light border-0" rows="3" placeholder="Mo ta ngan ve xe..."></textarea>
+              <label class="form-label text-secondary small fw-bold">Mô tả xe</label>
+              <textarea name="description" class="form-control bg-light border-0" rows="3" placeholder="Mô tả ngắn về xe..."></textarea>
             </div>
           </div>
         </div>
         <div class="modal-footer border-0 pt-0 pb-4 px-4">
-          <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Huy</button>
-          <button type="submit" class="btn btn-primary fw-bold px-4">Luu thong tin</button>
+          <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary fw-bold px-4">Lưu thông tin</button>
         </div>
       </form>
     </div>

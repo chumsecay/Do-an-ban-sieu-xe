@@ -104,8 +104,8 @@ $appName = env('APP_NAME', 'FLCar');
 <section class="cta-section">
   <div class="container">
     <h2>Sẵn Sàng Trải Nghiệm?</h2>
-    <p>Ghé thăm showroom hoặc liên hệ ngay để được tư vấn miễn phí.</p>
-    <a href="contact.php" class="btn btn-light btn-lg me-3">Liên Hệ Ngay</a>
+    <p>Ghé thăm showroom hoặc liên hệ ngày để được tư vấn miễn phí.</p>
+    <a href="contact.php" class="btn btn-light btn-lg me-3">Liên Hệ Ngày</a>
     <a href="showroom.php" class="btn btn-outline-light btn-lg">Xem Showroom</a>
   </div>
 </section>

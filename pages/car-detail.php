@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
+require_once __DIR__ . '/../bootstrap/shop.php';
 require_once __DIR__ . '/../config/database.php';
 ensureSessionStarted();
 
@@ -8,9 +9,11 @@ $currentPage = 'showroom';
 $appName = env('APP_NAME', 'FLCar');
 
 $pdo = getDBConnection();
+shopEnsureCarsStockColumn($pdo);
+$canShop = isUserLoggedIn() && currentUserRole() === 'user';
 
 // Validate car ID
-$carId = (int) ($_GET['id'] ?? 0);
+$carId = (int)($_GET['id'] ?? 0);
 if ($carId <= 0) {
     header('Location: showroom.php');
     exit;
@@ -49,7 +52,10 @@ try {
 // Xác định ảnh bìa
 $heroImg = '../img/bmwx5.jpg';
 foreach ($images as $img) {
-    if ($img['is_cover']) { $heroImg = htmlspecialchars($img['image_url']); break; }
+    if ($img['is_cover']) {
+        $heroImg = htmlspecialchars($img['image_url']);
+        break;
+    }
 }
 if ($heroImg === '../img/bmwx5.jpg' && !empty($images)) {
     $heroImg = htmlspecialchars($images[0]['image_url']);
@@ -61,10 +67,15 @@ try {
     $specStmt->execute([$carId]);
     $rawSpecs = $specStmt->fetchAll();
     $specs = [];
-    foreach ($rawSpecs as $s) { $specs[$s['spec_key']] = $s['spec_value']; }
+    foreach ($rawSpecs as $s) {
+        $specs[$s['spec_key']] = $s['spec_value'];
+    }
 } catch (Exception $e) {
     $specs = [];
 }
+
+$stockQty = (int)($car['stock_quantity'] ?? 0);
+$isPurchasable = ((string)($car['status'] ?? '') === 'available') && $stockQty > 0;
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -119,7 +130,7 @@ try {
         <div class="car-price-badge">$<?php echo number_format($car['price']); ?></div>
       </div>
       <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
-        <a href="#booking-section" class="btn btn-outline-light btn-lg rounded-pill px-5 fw-bold" style="border-width: 2px;">Nhận Tư Vấn Ngay</a>
+        <a href="#booking-section" class="btn btn-outline-light btn-lg rounded-pill px-5 fw-bold" style="border-width: 2px;">Nhận tư vấn ngày</a>
       </div>
     </div>
   </div>
@@ -143,11 +154,11 @@ try {
           <span class="badge bg-light text-dark px-3 py-2 rounded-pill border fw-semibold"><?php echo htmlspecialchars($car['category_name'] ?? ''); ?></span>
           <span class="badge bg-light text-dark px-3 py-2 rounded-pill border fw-semibold">Model <?php echo $car['model_year']; ?></span>
           <?php if ($car['status'] === 'available'): ?>
-            <span class="badge bg-success bg-opacity-25 text-success px-3 py-2 rounded-pill fw-semibold">✓ Còn Xe Ngay</span>
+            <span class="badge bg-success bg-opacity-25 text-success px-3 py-2 rounded-pill fw-semibold">Còn xe ngày</span>
           <?php elseif ($car['status'] === 'reserved'): ?>
-            <span class="badge bg-warning bg-opacity-25 text-warning px-3 py-2 rounded-pill fw-semibold">🔒 Đang Đặt Cọc</span>
+            <span class="badge bg-warning bg-opacity-25 text-warning px-3 py-2 rounded-pill fw-semibold">Đang đặt cọc</span>
           <?php else: ?>
-            <span class="badge bg-secondary bg-opacity-25 text-secondary px-3 py-2 rounded-pill fw-semibold">Đã Bán</span>
+            <span class="badge bg-secondary bg-opacity-25 text-secondary px-3 py-2 rounded-pill fw-semibold">Đã bán</span>
           <?php endif; ?>
         </div>
         <?php endif; ?>
@@ -163,13 +174,13 @@ try {
             'power' => ['bi-lightning-charge', 'Mã lực (HP)'],
             '0_100' => ['bi-stopwatch', '0 → 100 km/h'],
             'top_speed' => ['bi-speedometer2', 'Vận tốc tối đa'],
-            'engine' => ['bi-ev-front', 'Động Cơ'],
+            'engine' => ['bi-ev-front', 'Động cơ'],
             'drivetrain' => ['bi-bezier2', 'Hệ dẫn động'],
             'transmission' => ['bi-sliders', 'Hộp số'],
           ];
           foreach ($specs as $key => $value):
             $icon = $specIcons[$key][0] ?? 'bi-car-front';
-            $label = $specIcons[$key][1] ?? ucfirst(str_replace('_',' ',$key));
+            $label = $specIcons[$key][1] ?? ucfirst(str_replace('_', ' ', $key));
           ?>
           <div class="col-md-4 col-6">
             <div class="spec-box">
@@ -191,7 +202,7 @@ try {
       <!-- Thư viện ảnh -->
       <?php if (!empty($images)): ?>
       <div class="mb-5 reveal-item">
-        <h3 class="fw-bold mb-4 d-flex align-items-center"><i class="bi bi-images text-primary me-2"></i> Thư viện Hình Ảnh</h3>
+        <h3 class="fw-bold mb-4 d-flex align-items-center"><i class="bi bi-images text-primary me-2"></i> Thư viện hình ảnh</h3>
         <div class="row g-3">
           <?php foreach ($images as $idx => $img): ?>
           <div class="<?php echo $idx === 0 ? 'col-12' : 'col-md-6'; ?>">
@@ -214,12 +225,26 @@ try {
           <h4 class="fw-bold mb-1">Quan tâm xe này?</h4>
           <p class="text-white-50 mb-4" style="font-size: 0.9rem;">Để lại thông tin, chuyên viên FLCar sẽ liên hệ ngay.</p>
 
+          <div class="mb-4">
+            <div class="small text-white-50 mb-2">Tồn kho hiện tại: <strong class="text-white"><?php echo $stockQty; ?></strong></div>
+            <?php if (!$canShop): ?>
+              <a href="../login.php" class="btn btn-outline-light w-100 mb-2">Đăng nhập để mua xe</a>
+            <?php elseif ($isPurchasable): ?>
+              <div class="d-grid gap-2">
+                <a href="cart.php?action=add&car_id=<?php echo (int)$car['id']; ?>&from=detail" class="btn btn-outline-light">Thêm vào giỏ hàng</a>
+                <a href="cart.php?action=quick_buy&car_id=<?php echo (int)$car['id']; ?>" class="btn btn-primary fw-bold">Mua ngày</a>
+              </div>
+            <?php else: ?>
+              <button type="button" class="btn btn-secondary w-100" disabled>Tạm hết hàng</button>
+            <?php endif; ?>
+          </div>
+
           <form action="../pages/contact.php" method="GET">
             <input type="hidden" name="car_id" value="<?php echo $car['id']; ?>">
             <input type="hidden" name="car_name" value="<?php echo htmlspecialchars($car['name']); ?>">
             <div class="mb-3">
               <label class="form-label text-white-50 small">Họ và tên</label>
-              <input type="text" name="full_name" class="form-control bg-dark text-white border-secondary" placeholder="Vd: Nguyễn Văn A">
+              <input type="text" name="full_name" class="form-control bg-dark text-white border-secondary" placeholder="VD: Nguyễn Văn A">
             </div>
             <div class="mb-3">
               <label class="form-label text-white-50 small">Số điện thoại</label>

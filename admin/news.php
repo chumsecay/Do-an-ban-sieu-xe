@@ -145,7 +145,7 @@ if ($editId > 0) {
               <div class="form-check form-switch mb-2 ms-2">
                 <input class="form-check-input" type="checkbox" name="is_published" id="pubToggle"
                        <?php echo (!$editPost || $editPost['status'] === 'published') ? 'checked' : ''; ?>>
-                <label class="form-check-label fw-semibold" for="pubToggle">Đăng tải ngay</label>
+                <label class="form-check-label fw-semibold" for="pubToggle">Đăng tải ngày</label>
               </div>
             </div>
             <div class="col-12">
@@ -154,7 +154,7 @@ if ($editId > 0) {
                         placeholder="1-2 câu tóm tắt nội dung bài..."><?php echo htmlspecialchars($editPost['excerpt'] ?? ''); ?></textarea>
             </div>
             <div class="col-12">
-              <label class="form-label small fw-bold text-secondary">Nội Dung Bài Viết</label>
+              <label class="form-label small fw-bold text-secondary">Nội dung bài viết</label>
               <textarea name="content" class="form-control bg-light border-0" rows="14"
                         placeholder="Viết nội dung bài báo tại đây. Hỗ trợ HTML cơ bản như &lt;b&gt;, &lt;p&gt;, &lt;ul&gt;..."><?php echo htmlspecialchars($editPost['content'] ?? ''); ?></textarea>
             </div>

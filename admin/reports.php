@@ -2,12 +2,14 @@
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
 requireAdminOrRedirect('../index.php?forbidden=1');
+require_once __DIR__ . '/../bootstrap/order.php';
 require_once __DIR__ . '/../config/database.php';
 
 $adminPage = 'reports';
-$pageTitle = 'Bao cao & Thong ke';
+$pageTitle = 'Báo cáo & Thống kê';
 $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
+ensureOrderStatusSchema($pdo);
 
 $from = (string)($_GET['from'] ?? date('Y-m-01'));
 $to = (string)($_GET['to'] ?? date('Y-m-d'));
@@ -33,22 +35,27 @@ $topCars = [];
 $topEmployees = [];
 
 try {
+    $revenueStatuses = orderRevenueStatuses();
+    $fulfilledStatuses = orderFulfilledStatuses();
+    $revenueIn = implode(',', array_fill(0, count($revenueStatuses), '?'));
+    $fulfilledIn = implode(',', array_fill(0, count($fulfilledStatuses), '?'));
+
     $stmt = $pdo->prepare("
         SELECT COALESCE(SUM(total_amount),0)
         FROM orders
         WHERE order_date BETWEEN ? AND ?
-          AND status IN ('confirmed','completed')
+          AND status IN ($revenueIn)
     ");
-    $stmt->execute([$fromDT, $toDT]);
+    $stmt->execute(array_merge([$fromDT, $toDT], $revenueStatuses));
     $totalRevenue = (float)$stmt->fetchColumn();
 
     $stmt = $pdo->prepare("
         SELECT COALESCE(SUM(quantity),0)
         FROM orders
         WHERE order_date BETWEEN ? AND ?
-          AND status = 'completed'
+          AND status IN ($fulfilledIn)
     ");
-    $stmt->execute([$fromDT, $toDT]);
+    $stmt->execute(array_merge([$fromDT, $toDT], $fulfilledStatuses));
     $carsSold = (int)$stmt->fetchColumn();
 
     $stmt = $pdo->prepare("
@@ -75,16 +82,16 @@ try {
         JOIN orders o ON o.id = od.order_id
         JOIN cars c ON c.id = od.car_id
         WHERE o.order_date BETWEEN ? AND ?
-          AND o.status IN ('confirmed','completed')
+          AND o.status IN ($revenueIn)
         GROUP BY c.id, c.name
         ORDER BY revenue DESC
         LIMIT 10
     ");
-    $stmt->execute([$fromDT, $toDT]);
+    $stmt->execute(array_merge([$fromDT, $toDT], $revenueStatuses));
     $topCars = $stmt->fetchAll();
 
     $stmt = $pdo->prepare("
-        SELECT COALESCE(a.full_name, 'Khong xac dinh') AS admin_name,
+        SELECT COALESCE(a.full_name, 'Không xác định') AS admin_name,
                COUNT(o.id) AS orders_total,
                COALESCE(SUM(o.total_amount),0) AS revenue
         FROM orders o
@@ -117,7 +124,7 @@ if ((string)($_GET['export'] ?? '') === 'csv') {
         fputcsv($out, []);
         fputcsv($out, ['Summary']);
         fputcsv($out, ['Total Revenue', number_format($totalRevenue, 2, '.', '')]);
-        fputcsv($out, ['Cars Sold (completed)', $carsSold]);
+        fputcsv($out, ['Cars Sold (delivered/completed)', $carsSold]);
         fputcsv($out, ['New Customers', $newCustomers]);
         fputcsv($out, ['Orders Count', $ordersCount]);
         fputcsv($out, []);
@@ -169,29 +176,29 @@ if ((string)($_GET['export'] ?? '') === 'csv') {
           <input type="date" name="from" value="<?php echo htmlspecialchars($from, ENT_QUOTES, 'UTF-8'); ?>" class="filter-select" style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155;">
           <span style="display:flex; align-items:center;">-</span>
           <input type="date" name="to" value="<?php echo htmlspecialchars($to, ENT_QUOTES, 'UTF-8'); ?>" class="filter-select" style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155;">
-          <button class="btn-add" type="submit">Loc</button>
+          <button class="btn-add" type="submit">Lọc</button>
         </form>
         <a href="?from=<?php echo urlencode($from); ?>&to=<?php echo urlencode($to); ?>&export=csv" class="btn-add" style="background:#10b981;">
-          Xuat CSV
+          Xuất CSV
         </a>
       </div>
     </div>
 
     <div class="stat-cards" style="margin-bottom:24px;">
       <div class="stat-card">
-        <div class="stat-info"><h3>$<?php echo number_format($totalRevenue, 2); ?></h3><p>Tong doanh thu</p></div>
+        <div class="stat-info"><h3>$<?php echo number_format($totalRevenue, 2); ?></h3><p>Tổng doanh thu</p></div>
         <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
       </div>
       <div class="stat-card">
-        <div class="stat-info"><h3><?php echo number_format($carsSold); ?></h3><p>Xe da giao</p></div>
+        <div class="stat-info"><h3><?php echo number_format($carsSold); ?></h3><p>Xe đã giao</p></div>
         <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M17 17m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M5 17H3v-6l2-5h9l4 5h1a2 2 0 0 1 2 2v4h-2"/><path d="M9 17h6"/></svg></div>
       </div>
       <div class="stat-card">
-        <div class="stat-info"><h3><?php echo number_format($newCustomers); ?></h3><p>Khach hang moi</p></div>
+        <div class="stat-info"><h3><?php echo number_format($newCustomers); ?></h3><p>Khách hàng mới</p></div>
         <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
       </div>
       <div class="stat-card">
-        <div class="stat-info"><h3><?php echo number_format($ordersCount); ?></h3><p>Tong don hang</p></div>
+        <div class="stat-info"><h3><?php echo number_format($ordersCount); ?></h3><p>Tổng đơn hàng</p></div>
         <div class="stat-icon cyan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg></div>
       </div>
     </div>
@@ -202,14 +209,14 @@ if ((string)($_GET['export'] ?? '') === 'csv') {
         <table class="admin-table">
           <thead>
             <tr>
-              <th>Dong xe</th>
-              <th>So luong</th>
+              <th>Dòng xe</th>
+              <th>Số lượng</th>
               <th>Doanh thu</th>
             </tr>
           </thead>
           <tbody>
             <?php if (!$topCars): ?>
-              <tr><td colspan="3" class="text-center" style="color:#64748b;">Chua co du lieu</td></tr>
+              <tr><td colspan="3" class="text-center" style="color:#64748b;">Chưa có dữ liệu</td></tr>
             <?php else: ?>
               <?php foreach ($topCars as $r): ?>
                 <tr>
@@ -224,18 +231,18 @@ if ((string)($_GET['export'] ?? '') === 'csv') {
       </div>
 
       <div class="panel" style="flex:1; min-width:320px;">
-        <div class="panel-header"><h2 style="font-size:1rem; margin:0; font-weight:600;">Hieu suat admin tao don</h2></div>
+        <div class="panel-header"><h2 style="font-size:1rem; margin:0; font-weight:600;">Hiệu suất admin tạo đơn</h2></div>
         <table class="admin-table">
           <thead>
             <tr>
               <th>Admin</th>
-              <th>So don</th>
+              <th>Số đơn</th>
               <th>Doanh thu</th>
             </tr>
           </thead>
           <tbody>
             <?php if (!$topEmployees): ?>
-              <tr><td colspan="3" class="text-center" style="color:#64748b;">Chua co du lieu</td></tr>
+              <tr><td colspan="3" class="text-center" style="color:#64748b;">Chưa có dữ liệu</td></tr>
             <?php else: ?>
               <?php foreach ($topEmployees as $r): ?>
                 <tr>
