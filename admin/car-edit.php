@@ -24,6 +24,16 @@ $pdo->exec("
     ) ENGINE=InnoDB
 ");
 
+function ensureCarsStockQuantityColumn(PDO $pdo): void
+{
+    $check = $pdo->query("SHOW COLUMNS FROM cars LIKE 'stock_quantity'");
+    if (!$check->fetch()) {
+        $pdo->exec("ALTER TABLE cars ADD COLUMN stock_quantity INT UNSIGNED NOT NULL DEFAULT 1 AFTER price");
+    }
+}
+
+ensureCarsStockQuantityColumn($pdo);
+
 $carId = (int) ($_GET['id'] ?? 0);
 if ($carId <= 0) {
     header('Location: cars.php');
@@ -125,11 +135,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'update_info') {
-        $stmt = $pdo->prepare("UPDATE cars SET name=?, model_year=?, price=?, status=?, is_featured=?, description=? WHERE id=?");
+        $stockQuantity = (int)($_POST['stock_quantity'] ?? 0);
+        if ($stockQuantity < 0) {
+            $stockQuantity = 0;
+        }
+
+        $stmt = $pdo->prepare("UPDATE cars SET name=?, model_year=?, price=?, stock_quantity=?, status=?, is_featured=?, description=? WHERE id=?");
         $stmt->execute([
             $_POST['name'] ?? '',
             $_POST['year'] ?? date('Y'),
             $_POST['price'] ?? 0,
+            $stockQuantity,
             $_POST['status'] ?? 'available',
             isset($_POST['is_featured']) ? 1 : 0,
             $_POST['description'] ?? '',
@@ -331,6 +347,10 @@ $msgs = [
               <input type="number" name="price" class="form-control bg-light border-0" value="<?php echo $car['price']; ?>" required>
             </div>
             <div class="col-md-4">
+              <label class="form-label small fw-bold text-secondary">Số Lượng Tồn</label>
+              <input type="number" name="stock_quantity" min="0" step="1" class="form-control bg-light border-0" value="<?php echo (int)($car['stock_quantity'] ?? 0); ?>" required>
+            </div>
+            <div class="col-md-4">
               <label class="form-label small fw-bold text-secondary">Trạng Thái</label>
               <select name="status" class="form-select bg-light border-0">
                 <option value="available" <?php echo $car['status']==='available' ? 'selected':''; ?>>Sẵn Hàng</option>
@@ -338,7 +358,7 @@ $msgs = [
                 <option value="sold"      <?php echo $car['status']==='sold'      ? 'selected':''; ?>>Đã Bán</option>
               </select>
             </div>
-            <div class="col-md-4 d-flex align-items-end">
+            <div class="col-12 d-flex align-items-end">
               <div class="form-check form-switch ms-2 mb-2">
                 <input class="form-check-input" type="checkbox" name="is_featured" id="featuredToggle" <?php echo $car['is_featured'] ? 'checked' : ''; ?>>
                 <label class="form-check-label fw-semibold" for="featuredToggle">Xe Nổi Bật (Trang Chủ)</label>

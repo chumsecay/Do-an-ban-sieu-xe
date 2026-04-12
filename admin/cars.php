@@ -9,6 +9,16 @@ $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
 $msg = (string)($_GET['msg'] ?? '');
 
+function ensureCarsStockQuantityColumn(PDO $pdo): void
+{
+    $check = $pdo->query("SHOW COLUMNS FROM cars LIKE 'stock_quantity'");
+    if (!$check->fetch()) {
+        $pdo->exec("ALTER TABLE cars ADD COLUMN stock_quantity INT UNSIGNED NOT NULL DEFAULT 1 AFTER price");
+    }
+}
+
+ensureCarsStockQuantityColumn($pdo);
+
 function redirectCars(string $msg = ''): void
 {
     $url = 'cars.php';
@@ -179,6 +189,64 @@ function ensureExistingCategory(PDO $pdo, int $categoryId): int
     return (int)$pdo->lastInsertId();
 }
 
+function findBrandIdByName(PDO $pdo, string $name): int
+{
+    $name = trim($name);
+    if ($name === '') {
+        return 0;
+    }
+    $stmt = $pdo->prepare('SELECT id FROM brands WHERE LOWER(name) = LOWER(?) LIMIT 1');
+    $stmt->execute([$name]);
+    return (int)$stmt->fetchColumn();
+}
+
+function findCategoryIdByName(PDO $pdo, string $name): int
+{
+    $name = trim($name);
+    if ($name === '') {
+        return 0;
+    }
+    $stmt = $pdo->prepare('SELECT id FROM car_categories WHERE LOWER(name) = LOWER(?) LIMIT 1');
+    $stmt->execute([$name]);
+    return (int)$stmt->fetchColumn();
+}
+
+function findOrCreateBrandId(PDO $pdo, string $name): int
+{
+    $name = trim($name);
+    if ($name === '') {
+        return ensureExistingBrand($pdo, 0);
+    }
+
+    $existingId = findBrandIdByName($pdo, $name);
+    if ($existingId > 0) {
+        return $existingId;
+    }
+
+    $slug = uniqueSlug($pdo, 'brands', slugifyText($name));
+    $stmt = $pdo->prepare('INSERT INTO brands (name, slug, is_active) VALUES (?, ?, 1)');
+    $stmt->execute([$name, $slug]);
+    return (int)$pdo->lastInsertId();
+}
+
+function findOrCreateCategoryId(PDO $pdo, string $name): int
+{
+    $name = trim($name);
+    if ($name === '') {
+        return ensureExistingCategory($pdo, 0);
+    }
+
+    $existingId = findCategoryIdByName($pdo, $name);
+    if ($existingId > 0) {
+        return $existingId;
+    }
+
+    $slug = uniqueSlug($pdo, 'car_categories', slugifyText($name));
+    $stmt = $pdo->prepare('INSERT INTO car_categories (name, slug, is_active) VALUES (?, ?, 1)');
+    $stmt->execute([$name, $slug]);
+    return (int)$pdo->lastInsertId();
+}
+
 function getCarDependencyCounts(PDO $pdo, int $carId): array
 {
     $tables = [
@@ -238,14 +306,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim((string)($_POST['name'] ?? ''));
             $year = (int)($_POST['year'] ?? date('Y'));
             $price = (float)($_POST['price'] ?? 0);
+            $stockQuantity = (int)($_POST['stock_quantity'] ?? 1);
             $status = (string)($_POST['status'] ?? 'available');
-            $brandId = ensureExistingBrand($pdo, (int)($_POST['brand_id'] ?? 0));
-            $categoryId = ensureExistingCategory($pdo, (int)($_POST['category_id'] ?? 0));
+            $brandInput = trim((string)($_POST['brand_input'] ?? ''));
+            $categoryInput = trim((string)($_POST['category_input'] ?? ''));
             $description = trim((string)($_POST['description'] ?? ''));
             $imageUrlInput = trim((string)($_POST['image_url'] ?? ''));
 
             if ($name === '') {
                 redirectCars('car_invalid_name');
+            }
+            if ($brandInput === '' || $categoryInput === '') {
+                redirectCars('car_missing_brand_or_category');
             }
             if (!in_array($status, ['available', 'reserved', 'sold'], true)) {
                 $status = 'available';
@@ -256,6 +328,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($price < 0) {
                 $price = 0;
             }
+            if ($stockQuantity < 0) {
+                $stockQuantity = 0;
+            }
+
+            $brandId = findOrCreateBrandId($pdo, $brandInput);
+            $categoryId = findOrCreateCategoryId($pdo, $categoryInput);
 
             $uploaded = uploadCarImage($_FILES['image_file'] ?? []);
             if (!$uploaded['ok'] && $uploaded['code'] !== 'no_file') {
@@ -285,7 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
                 $pdo->beginTransaction();
-                $stmt = $pdo->prepare('INSERT INTO cars (code, name, slug, brand_id, category_id, model_year, price, status, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                $stmt = $pdo->prepare('INSERT INTO cars (code, name, slug, brand_id, category_id, model_year, price, stock_quantity, status, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 $stmt->execute([
                     $code,
                     $name,
@@ -294,6 +372,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $categoryId,
                     $year,
                     $price,
+                    $stockQuantity,
                     $status,
                     $description !== '' ? $description : null,
                 ]);
@@ -474,6 +553,7 @@ $alertMap = [
     'car_deleted' => ['warning', 'Da xoa xe.'],
     'car_delete_blocked' => ['danger', 'Khong the xoa xe nay vi da phat sinh du lieu lien quan (don hang/bao hanh/chi tiet don/inquiry).'],
     'car_invalid_name' => ['danger', 'Ten xe khong hop le.'],
+    'car_missing_brand_or_category' => ['danger', 'Hay nhap day du hang xe va dong xe.'],
     'car_invalid_data' => ['danger', 'Du lieu xe khong hop le.'],
     'car_invalid_image_url' => ['danger', 'Link anh khong hop le.'],
     'car_upload_failed' => ['danger', 'Upload anh that bai.'],
@@ -615,13 +695,14 @@ $alertMap = [
                   <th>Dong</th>
                   <th>Nam</th>
                   <th>Gia</th>
+                  <th>So luong</th>
                   <th>Trang thai</th>
                   <th class="text-end pe-4">Thao tac</th>
                 </tr>
               </thead>
               <tbody>
                 <?php if (count($cars) === 0): ?>
-                  <tr><td colspan="8" class="text-center py-5 text-muted">Khong co xe nao phu hop bo loc.</td></tr>
+                  <tr><td colspan="9" class="text-center py-5 text-muted">Khong co xe nao phu hop bo loc.</td></tr>
                 <?php else: ?>
                   <?php foreach ($cars as $c):
                     $imgSrc = !empty($c['cover_image']) ? htmlspecialchars((string)$c['cover_image'], ENT_QUOTES, 'UTF-8') : '../img/bmwx5.jpg';
@@ -638,6 +719,7 @@ $alertMap = [
                     <td class="text-secondary fw-medium"><?php echo htmlspecialchars((string)($c['category_name'] ?? 'N/A'), ENT_QUOTES, 'UTF-8'); ?></td>
                     <td class="fw-semibold"><?php echo (int)$c['model_year']; ?></td>
                     <td class="fw-bold text-dark fs-6">$<?php echo number_format((float)$c['price']); ?></td>
+                    <td class="fw-semibold"><?php echo (int)($c['stock_quantity'] ?? 0); ?></td>
                     <td>
                       <?php if ($c['status'] === 'sold'): ?>
                         <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Da ban</span>
@@ -773,25 +855,31 @@ $alertMap = [
               <label class="form-label text-secondary small fw-bold">Nam san xuat</label>
               <input type="number" name="year" class="form-control bg-light border-0" value="<?php echo date('Y'); ?>" required>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
               <label class="form-label text-secondary small fw-bold">Gia niem yet ($)</label>
               <input type="number" name="price" min="0" step="0.01" class="form-control bg-light border-0" value="0" required>
             </div>
-            <div class="col-md-4">
-              <label class="form-label text-secondary small fw-bold">Hang xe</label>
-              <select name="brand_id" class="form-select bg-light border-0">
-                <?php foreach ($brands as $b): ?>
-                  <option value="<?php echo (int)$b['id']; ?>"><?php echo htmlspecialchars((string)$b['name'], ENT_QUOTES, 'UTF-8'); ?></option>
-                <?php endforeach; ?>
-              </select>
+            <div class="col-md-3">
+              <label class="form-label text-secondary small fw-bold">So luong ton</label>
+              <input type="number" name="stock_quantity" min="0" step="1" class="form-control bg-light border-0" value="1" required>
             </div>
-            <div class="col-md-4">
-              <label class="form-label text-secondary small fw-bold">Dong xe</label>
-              <select name="category_id" class="form-select bg-light border-0">
-                <?php foreach ($categories as $cat): ?>
-                  <option value="<?php echo (int)$cat['id']; ?>"><?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?></option>
+            <div class="col-md-3">
+              <label class="form-label text-secondary small fw-bold">Hang xe (go de tim / them moi)</label>
+              <input type="text" name="brand_input" class="form-control bg-light border-0" list="brandOptions" placeholder="Vi du: Rolls-Royce, BMW..." required>
+              <datalist id="brandOptions">
+                <?php foreach ($brands as $b): ?>
+                  <option value="<?php echo htmlspecialchars((string)$b['name'], ENT_QUOTES, 'UTF-8'); ?>"></option>
                 <?php endforeach; ?>
-              </select>
+              </datalist>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label text-secondary small fw-bold">Dong xe (go de tim / them moi)</label>
+              <input type="text" name="category_input" class="form-control bg-light border-0" list="categoryOptions" placeholder="Vi du: Sedan, SUV, Coupe..." required>
+              <datalist id="categoryOptions">
+                <?php foreach ($categories as $cat): ?>
+                  <option value="<?php echo htmlspecialchars((string)$cat['name'], ENT_QUOTES, 'UTF-8'); ?>"></option>
+                <?php endforeach; ?>
+              </datalist>
             </div>
             <div class="col-md-4">
               <label class="form-label text-secondary small fw-bold">Trang thai xe</label>
@@ -800,6 +888,9 @@ $alertMap = [
                 <option value="reserved">Dat coc</option>
                 <option value="sold">Da ban</option>
               </select>
+            </div>
+            <div class="col-12">
+              <small class="text-muted">Dong xe la phan loai xe (kieu dang/phan khuc), vi du: Sedan, SUV, Coupe, Hatchback, Pickup...</small>
             </div>
             <div class="col-md-8">
               <label class="form-label text-secondary small fw-bold">Link anh CDN (tuy chon)</label>
