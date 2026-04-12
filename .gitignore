@@ -1,2 +1,7 @@
 .env
 db_data
+uploads/*
+!uploads/.gitkeep
+!uploads/cars/
+uploads/cars/*
+!uploads/cars/.gitkeep

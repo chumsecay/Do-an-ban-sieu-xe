@@ -30,6 +30,96 @@ if ($carId <= 0) {
     exit;
 }
 
+function redirectCarEdit(int $carId, string $msg): void
+{
+    header('Location: car-edit.php?id=' . $carId . '&msg=' . urlencode($msg));
+    exit;
+}
+
+function normalizeImageSource(string $value): ?string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return null;
+    }
+    if (preg_match('#^https?://#i', $value)) {
+        return filter_var($value, FILTER_VALIDATE_URL) ? $value : null;
+    }
+    if (str_starts_with($value, '/')) {
+        return $value;
+    }
+    return null;
+}
+
+function uploadCarImageFile(array $file): array
+{
+    $uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError === UPLOAD_ERR_NO_FILE) {
+        return ['ok' => false, 'code' => 'no_file', 'web' => null, 'fs' => null];
+    }
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        return ['ok' => false, 'code' => 'img_upload_failed', 'web' => null, 'fs' => null];
+    }
+
+    $tmpName = (string)($file['tmp_name'] ?? '');
+    if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+        return ['ok' => false, 'code' => 'img_upload_failed', 'web' => null, 'fs' => null];
+    }
+
+    $size = (int)($file['size'] ?? 0);
+    if ($size <= 0 || $size > 5 * 1024 * 1024) {
+        return ['ok' => false, 'code' => 'img_too_large', 'web' => null, 'fs' => null];
+    }
+
+    $mimeMap = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        'image/avif' => 'avif',
+    ];
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string)$finfo->file($tmpName);
+    if (!isset($mimeMap[$mime]) || @getimagesize($tmpName) === false) {
+        return ['ok' => false, 'code' => 'img_invalid_type', 'web' => null, 'fs' => null];
+    }
+
+    $uploadDir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'cars';
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+        return ['ok' => false, 'code' => 'img_dir_unavailable', 'web' => null, 'fs' => null];
+    }
+    if (!is_writable($uploadDir)) {
+        return ['ok' => false, 'code' => 'img_dir_not_writable', 'web' => null, 'fs' => null];
+    }
+
+    try {
+        $rand = bin2hex(random_bytes(8));
+    } catch (Throwable $ignored) {
+        $rand = substr(md5(uniqid('', true)), 0, 16);
+    }
+    $filename = 'car-' . date('YmdHis') . '-' . $rand . '.' . $mimeMap[$mime];
+    $targetFs = $uploadDir . DIRECTORY_SEPARATOR . $filename;
+
+    if (!move_uploaded_file($tmpName, $targetFs)) {
+        return ['ok' => false, 'code' => 'img_move_failed', 'web' => null, 'fs' => null];
+    }
+
+    return ['ok' => true, 'code' => '', 'web' => '/uploads/cars/' . $filename, 'fs' => $targetFs];
+}
+
+function removeLocalCarImage(string $url): void
+{
+    if (!str_starts_with($url, '/uploads/cars/')) {
+        return;
+    }
+    $relative = str_replace('/', DIRECTORY_SEPARATOR, ltrim($url, '/'));
+    $file = dirname(__DIR__) . DIRECTORY_SEPARATOR . $relative;
+    if (is_file($file)) {
+        @unlink($file);
+    }
+}
+
 // Handle POST updates
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -75,26 +165,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'add_image') {
-        $url = trim($_POST['image_url'] ?? '');
+        $urlInput = trim($_POST['image_url'] ?? '');
         $alt = trim($_POST['alt_text'] ?? '');
         $isCover = isset($_POST['is_cover']) ? 1 : 0;
-        if ($url !== '') {
+
+        $uploaded = uploadCarImageFile($_FILES['image_file'] ?? []);
+        if (!$uploaded['ok'] && $uploaded['code'] !== 'no_file') {
+            redirectCarEdit($carId, $uploaded['code']);
+        }
+
+        $url = null;
+        if ($urlInput !== '') {
+            $url = normalizeImageSource($urlInput);
+            if ($url === null && !$uploaded['ok']) {
+                redirectCarEdit($carId, 'img_invalid_url');
+            }
+        }
+
+        $finalImage = $uploaded['ok'] ? (string)$uploaded['web'] : $url;
+        if ($finalImage === null || $finalImage === '') {
+            redirectCarEdit($carId, 'img_missing');
+        }
+
+        try {
             if ($isCover) {
                 $pdo->prepare("UPDATE car_images SET is_cover=0 WHERE car_id=?")->execute([$carId]);
             }
-            $pdo->prepare("INSERT INTO car_images (car_id, image_url, alt_text, is_cover) VALUES (?,?,?,?)")->execute([$carId, $url, $alt, $isCover]);
+            $pdo->prepare("INSERT INTO car_images (car_id, image_url, alt_text, is_cover) VALUES (?,?,?,?)")->execute([$carId, $finalImage, $alt, $isCover]);
+        } catch (Throwable $e) {
+            if ($uploaded['ok'] && is_string($uploaded['fs']) && is_file($uploaded['fs'])) {
+                @unlink($uploaded['fs']);
+            }
+            throw $e;
         }
-        header("Location: car-edit.php?id={$carId}&msg=img_added");
-        exit;
+
+        redirectCarEdit($carId, 'img_added');
     }
 
     if ($action === 'delete_image') {
         $imgId = (int) ($_POST['img_id'] ?? 0);
         if ($imgId) {
+            $imgStmt = $pdo->prepare("SELECT image_url FROM car_images WHERE id=? AND car_id=? LIMIT 1");
+            $imgStmt->execute([$imgId, $carId]);
+            $imgRow = $imgStmt->fetch();
+
             $pdo->prepare("DELETE FROM car_images WHERE id=? AND car_id=?")->execute([$imgId, $carId]);
+
+            if ($imgRow && !empty($imgRow['image_url'])) {
+                removeLocalCarImage((string)$imgRow['image_url']);
+            }
         }
-        header("Location: car-edit.php?id={$carId}&msg=img_deleted");
-        exit;
+        redirectCarEdit($carId, 'img_deleted');
     }
 
     if ($action === 'set_cover') {
@@ -134,6 +255,14 @@ $msgs = [
     'img_added'    => ['success', 'Đã thêm hình ảnh mới!'],
     'img_deleted'  => ['warning', 'Đã xóa hình ảnh.'],
     'cover_set'    => ['info',    'Đã đặt lại ảnh bìa.'],
+    'img_missing' => ['danger', 'Hay nhap URL hoac upload 1 file anh.'],
+    'img_invalid_url' => ['danger', 'URL anh khong hop le. Dung http/https hoac duong dan bat dau bang /.'],
+    'img_upload_failed' => ['danger', 'Upload anh that bai. Vui long thu lai.'],
+    'img_too_large' => ['danger', 'File anh vuot qua 5MB.'],
+    'img_invalid_type' => ['danger', 'Chi chap nhan JPG, PNG, WEBP, GIF, AVIF.'],
+    'img_dir_unavailable' => ['danger', 'Khong tao duoc thu muc uploads/cars.'],
+    'img_dir_not_writable' => ['danger', 'Thu muc uploads/cars khong co quyen ghi.'],
+    'img_move_failed' => ['danger', 'Khong luu duoc file anh vao uploads/cars.'],
 ];
 ?>
 <!DOCTYPE html>
@@ -308,13 +437,17 @@ $msgs = [
           <p class="text-muted small mb-4">Chưa có ảnh nào. Thêm mới bên dưới.</p>
         <?php endif; ?>
 
-        <form method="POST" class="row g-2 align-items-end">
+        <form method="POST" enctype="multipart/form-data" class="row g-2 align-items-end">
           <input type="hidden" name="action" value="add_image">
           <div class="col-md-5">
             <label class="form-label small fw-bold text-secondary">URL Hình Ảnh</label>
-            <input type="text" name="image_url" class="form-control bg-light border-0" placeholder="https:// hoặc /img/..." required>
+            <input type="text" name="image_url" class="form-control bg-light border-0" placeholder="https:// hoặc /uploads/...">
           </div>
           <div class="col-md-3">
+            <label class="form-label small fw-bold text-secondary">Upload file (tùy chọn)</label>
+            <input type="file" name="image_file" class="form-control bg-light border-0" accept="image/*">
+          </div>
+          <div class="col-md-2">
             <label class="form-label small fw-bold text-secondary">Alt text (mô tả)</label>
             <input type="text" name="alt_text" class="form-control bg-light border-0" placeholder="Tùy chọn">
           </div>
@@ -326,6 +459,9 @@ $msgs = [
           </div>
           <div class="col-md-2">
             <button type="submit" class="btn btn-success fw-bold w-100 rounded-3">+ Thêm Ảnh</button>
+          </div>
+          <div class="col-12">
+            <small class="text-muted">Có thể nhập URL CDN hoặc upload file. Nếu nhập cả hai, hệ thống ưu tiên file upload.</small>
           </div>
         </form>
       </div>
