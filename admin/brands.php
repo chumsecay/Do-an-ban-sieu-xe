@@ -1,105 +1,330 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
 requireAdminOrRedirect('../index.php?forbidden=1');
+require_once __DIR__ . '/../config/database.php';
+
 $adminPage = 'brands';
-$pageTitle = 'Quản lý hãng';
+$pageTitle = 'Quan ly hang';
 $appName = env('APP_NAME', 'FLCar');
+$pdo = getDBConnection();
+
+function redirectWithMsg(string $msg): void
+{
+    header('Location: brands.php?msg=' . urlencode($msg));
+    exit;
+}
+
+function slugifyBrand(string $value): string
+{
+    $value = trim($value);
+    if ($value === '') {
+        return 'brand-' . time();
+    }
+
+    $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+    if (is_string($converted) && $converted !== '') {
+        $value = $converted;
+    }
+
+    $value = strtolower($value);
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+    $value = trim($value, '-');
+    return $value !== '' ? $value : 'brand-' . time();
+}
+
+function uniqueBrandSlug(PDO $pdo, string $baseSlug, ?int $excludeId = null): string
+{
+    $slug = $baseSlug;
+    $i = 1;
+    while (true) {
+        if ($excludeId !== null) {
+            $stmt = $pdo->prepare('SELECT id FROM brands WHERE slug = ? AND id <> ? LIMIT 1');
+            $stmt->execute([$slug, $excludeId]);
+        } else {
+            $stmt = $pdo->prepare('SELECT id FROM brands WHERE slug = ? LIMIT 1');
+            $stmt->execute([$slug]);
+        }
+        if (!$stmt->fetch()) {
+            return $slug;
+        }
+        $slug = $baseSlug . '-' . $i;
+        $i++;
+    }
+}
+
+$msg = (string)($_GET['msg'] ?? '');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string)($_POST['action'] ?? '');
+
+    try {
+        if ($action === 'add') {
+            $name = trim((string)($_POST['name'] ?? ''));
+            $country = trim((string)($_POST['country'] ?? ''));
+            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $rawSlug = trim((string)($_POST['slug'] ?? ''));
+
+            if ($name === '') {
+                redirectWithMsg('invalid_name');
+            }
+
+            $baseSlug = slugifyBrand($rawSlug !== '' ? $rawSlug : $name);
+            $slug = uniqueBrandSlug($pdo, $baseSlug);
+
+            $stmt = $pdo->prepare('INSERT INTO brands (name, slug, country, is_active) VALUES (?, ?, ?, ?)');
+            $stmt->execute([$name, $slug, $country !== '' ? $country : null, $isActive]);
+            redirectWithMsg('added');
+        }
+
+        if ($action === 'edit') {
+            $id = (int)($_POST['brand_id'] ?? 0);
+            $name = trim((string)($_POST['name'] ?? ''));
+            $country = trim((string)($_POST['country'] ?? ''));
+            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $rawSlug = trim((string)($_POST['slug'] ?? ''));
+
+            if ($id <= 0 || $name === '') {
+                redirectWithMsg('invalid_data');
+            }
+
+            $baseSlug = slugifyBrand($rawSlug !== '' ? $rawSlug : $name);
+            $slug = uniqueBrandSlug($pdo, $baseSlug, $id);
+
+            $stmt = $pdo->prepare('UPDATE brands SET name = ?, slug = ?, country = ?, is_active = ? WHERE id = ?');
+            $stmt->execute([$name, $slug, $country !== '' ? $country : null, $isActive, $id]);
+            redirectWithMsg('updated');
+        }
+
+        if ($action === 'delete') {
+            $id = (int)($_POST['brand_id'] ?? 0);
+            if ($id > 0) {
+                $stmt = $pdo->prepare('DELETE FROM brands WHERE id = ?');
+                $stmt->execute([$id]);
+                redirectWithMsg('deleted');
+            }
+            redirectWithMsg('invalid_data');
+        }
+    } catch (Throwable $e) {
+        if ($action === 'delete') {
+            redirectWithMsg('delete_blocked');
+        }
+        redirectWithMsg('db_error');
+    }
+}
+
+$q = trim((string)($_GET['q'] ?? ''));
+$status = (string)($_GET['status'] ?? '');
+$editId = (int)($_GET['edit'] ?? 0);
+
+$where = [];
+$params = [];
+
+if ($q !== '') {
+    $where[] = '(b.name LIKE :q OR b.slug LIKE :q OR b.country LIKE :q)';
+    $params[':q'] = '%' . $q . '%';
+}
+if ($status === '1' || $status === '0') {
+    $where[] = 'b.is_active = :status';
+    $params[':status'] = (int)$status;
+}
+
+$sql = '
+    SELECT b.*,
+           (SELECT COUNT(*) FROM cars c WHERE c.brand_id = b.id) AS car_count
+    FROM brands b
+';
+if ($where) {
+    $sql .= ' WHERE ' . implode(' AND ', $where);
+}
+$sql .= ' ORDER BY b.created_at DESC, b.id DESC';
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$brands = $stmt->fetchAll();
+
+$stats = [
+    'total' => 0,
+    'active' => 0,
+    'inactive' => 0,
+];
+try {
+    $stats['total'] = (int)$pdo->query('SELECT COUNT(*) FROM brands')->fetchColumn();
+    $stats['active'] = (int)$pdo->query('SELECT COUNT(*) FROM brands WHERE is_active = 1')->fetchColumn();
+    $stats['inactive'] = $stats['total'] - $stats['active'];
+} catch (Throwable $ignored) {
+}
+
+$editBrand = null;
+if ($editId > 0) {
+    $s = $pdo->prepare('SELECT * FROM brands WHERE id = ? LIMIT 1');
+    $s->execute([$editId]);
+    $editBrand = $s->fetch() ?: null;
+}
+
+$alertMap = [
+    'added' => ['success', 'Da them hang moi.'],
+    'updated' => ['info', 'Da cap nhat thong tin hang.'],
+    'deleted' => ['warning', 'Da xoa hang xe.'],
+    'delete_blocked' => ['danger', 'Khong the xoa hang dang duoc gan cho xe.'],
+    'invalid_name' => ['danger', 'Ten hang khong hop le.'],
+    'invalid_data' => ['danger', 'Du lieu gui len khong hop le.'],
+    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title><?php echo $pageTitle; ?> - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
+<title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="../css/admin.css" rel="stylesheet">
 <link rel="icon" href="../img/logo.png" type="image/png">
+<style>
+  body { font-family: 'Inter', sans-serif !important; background: #f8fafc; }
+  .table > :not(caption) > * > * { padding: 14px 12px; vertical-align: middle; }
+  .mini-stat { background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+  .mini-stat h3 { margin:0; font-size:1.3rem; font-weight:800; }
+  .mini-stat p { margin:2px 0 0; color:#64748b; font-size:.8rem; }
+</style>
 </head>
-<body class="admin-body">
+<body>
+<div class="admin-wrapper" id="adminWrapper">
+  <?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+  <div class="admin-main">
+    <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
 
-<?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
-
-<div class="admin-main">
-  <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
-
-  <main class="admin-content">
-    <div class="admin-header d-flex justify-between align-items-center mb-4">
-      <h1 class="admin-title" style="margin:0;"><?php echo $pageTitle; ?></h1>
-    </div>
-
-    <!-- Filter bar -->
-    <div class="panel" style="margin-bottom:0; border-radius:var(--radius) var(--radius) 0 0">
-      <div class="panel-header" style="border-bottom:none; flex-wrap:wrap; gap:12px">
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-          <input type="text" class="filter-select" placeholder="Tìm kiếm tên hãng..." style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155; width:250px;">
-          <select class="filter-select" style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155">
-            <option value="">Tất cả trạng thái</option>
-            <option value="1">Đang hoạt động</option>
-            <option value="0">Tạm dừng</option>
-          </select>
+    <main class="admin-content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="h4 fw-bold text-dark mb-1">Quan Ly Hang Xe</h2>
+          <p class="text-secondary small mb-0">Them, sua, xoa va quan ly trang thai hang xe.</p>
         </div>
-        <button class="btn-add" style="background:var(--primary); color:white; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:6px;">
-          <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Thêm hãng mới
-        </button>
       </div>
-    </div>
-    
-    <!-- Table -->
-    <div class="panel" style="border-radius:0 0 var(--radius) var(--radius)">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th style="width:30px"><input type="checkbox"></th>
-            <th>Tên hãng</th>
-            <th>Mã (Slug)</th>
-            <th>Quốc gia</th>
-            <th>Trạng thái</th>
-            <th style="text-align:center;">Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>BMW</strong></td>
-            <td>bmw</td>
-            <td>Germany</td>
-            <td><span class="badge-status badge-available">Đang hoạt động</span></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Mercedes-Benz</strong></td>
-            <td>mercedes</td>
-            <td>Germany</td>
-            <td><span class="badge-status badge-available">Đang hoạt động</span></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Ford</strong></td>
-            <td>ford</td>
-            <td>USA</td>
-            <td><span class="badge-status badge-sold">Tạm dừng</span></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tong so hang</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['active']; ?></h3><p>Dang hoat dong</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['inactive']; ?></h3><p>Tam dung</p></div></div>
+      </div>
+
+      <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
+        <div class="alert alert-<?php echo $a[0]; ?> border-0 rounded-3"><?php echo $a[1]; ?></div>
+      <?php endif; ?>
+
+      <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
+        <div class="card-body">
+          <form method="POST" class="row g-3 align-items-end">
+            <input type="hidden" name="action" value="<?php echo $editBrand ? 'edit' : 'add'; ?>">
+            <?php if ($editBrand): ?>
+              <input type="hidden" name="brand_id" value="<?php echo (int)$editBrand['id']; ?>">
+            <?php endif; ?>
+
+            <div class="col-md-4">
+              <label class="form-label small fw-bold text-secondary">Ten hang</label>
+              <input type="text" name="name" class="form-control bg-light border-0" required
+                     value="<?php echo htmlspecialchars((string)($editBrand['name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold text-secondary">Slug (tuy chon)</label>
+              <input type="text" name="slug" class="form-control bg-light border-0"
+                     value="<?php echo htmlspecialchars((string)($editBrand['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold text-secondary">Quoc gia</label>
+              <input type="text" name="country" class="form-control bg-light border-0"
+                     value="<?php echo htmlspecialchars((string)($editBrand['country'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-2">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="is_active" id="activeCheck"
+                       <?php echo $editBrand ? ((int)$editBrand['is_active'] === 1 ? 'checked' : '') : 'checked'; ?>>
+                <label class="form-check-label small fw-semibold" for="activeCheck">Dang hoat dong</label>
+              </div>
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary fw-bold px-4">
+                <?php echo $editBrand ? 'Luu cap nhat' : 'Them hang moi'; ?>
+              </button>
+              <?php if ($editBrand): ?>
+                <a href="brands.php" class="btn btn-light border fw-semibold">Huy sua</a>
+              <?php endif; ?>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm" style="border-radius:16px;">
+        <div class="card-body">
+          <form method="GET" class="row g-2 mb-3">
+            <div class="col-md-5">
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim theo ten, slug, quoc gia..."
+                     value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-3">
+              <select name="status" class="form-select bg-light border-0">
+                <option value="">Tat ca trang thai</option>
+                <option value="1" <?php echo $status === '1' ? 'selected' : ''; ?>>Dang hoat dong</option>
+                <option value="0" <?php echo $status === '0' ? 'selected' : ''; ?>>Tam dung</option>
+              </select>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+              <button class="btn btn-outline-primary fw-semibold" type="submit">Loc</button>
+              <a href="brands.php" class="btn btn-outline-secondary fw-semibold">Xoa loc</a>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem;letter-spacing:.5px;">
+                  <th>Ten hang</th>
+                  <th>Slug</th>
+                  <th>Quoc gia</th>
+                  <th>So xe</th>
+                  <th>Trang thai</th>
+                  <th class="text-end">Thao tac</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (!$brands): ?>
+                  <tr><td colspan="6" class="text-center text-muted py-4">Khong co du lieu hang xe.</td></tr>
+                <?php else: ?>
+                  <?php foreach ($brands as $b): ?>
+                    <tr>
+                      <td class="fw-semibold"><?php echo htmlspecialchars((string)$b['name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><code><?php echo htmlspecialchars((string)$b['slug'], ENT_QUOTES, 'UTF-8'); ?></code></td>
+                      <td><?php echo htmlspecialchars((string)($b['country'] ?? '---'), ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?php echo (int)$b['car_count']; ?></td>
+                      <td>
+                        <?php if ((int)$b['is_active'] === 1): ?>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle">Hoat dong</span>
+                        <?php else: ?>
+                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tam dung</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="brands.php?edit=<?php echo (int)$b['id']; ?>">Sua</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa hang nay?');">
+                          <input type="hidden" name="action" value="delete">
+                          <input type="hidden" name="brand_id" value="<?php echo (int)$b['id']; ?>">
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
-
-

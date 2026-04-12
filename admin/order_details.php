@@ -1,100 +1,319 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
 requireAdminOrRedirect('../index.php?forbidden=1');
+require_once __DIR__ . '/../config/database.php';
+
 $adminPage = 'order_details';
-$pageTitle = 'Chi tiết hóa đơn';
+$pageTitle = 'Chi tiet hoa don';
 $appName = env('APP_NAME', 'FLCar');
+$pdo = getDBConnection();
+
+function redirectDetail(string $msg): void
+{
+    header('Location: order_details.php?msg=' . urlencode($msg));
+    exit;
+}
+
+function normalizeMoney(float $value): float
+{
+    if ($value < 0) {
+        return 0.0;
+    }
+    return round($value, 2);
+}
+
+$msg = (string)($_GET['msg'] ?? '');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string)($_POST['action'] ?? '');
+
+    try {
+        if ($action === 'add') {
+            $orderId = (int)($_POST['order_id'] ?? 0);
+            $carId = (int)($_POST['car_id'] ?? 0);
+            $qty = max(1, (int)($_POST['quantity'] ?? 1));
+            $unitPrice = normalizeMoney((float)($_POST['unit_price'] ?? 0));
+            $discount = normalizeMoney((float)($_POST['discount_amount'] ?? 0));
+            $total = normalizeMoney(($qty * $unitPrice) - $discount);
+
+            if ($orderId <= 0 || $carId <= 0) {
+                redirectDetail('invalid_data');
+            }
+
+            $stmt = $pdo->prepare('INSERT INTO order_details (order_id, car_id, quantity, unit_price, discount_amount, total_price) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$orderId, $carId, $qty, $unitPrice, $discount, $total]);
+            redirectDetail('added');
+        }
+
+        if ($action === 'edit') {
+            $detailId = (int)($_POST['detail_id'] ?? 0);
+            $orderId = (int)($_POST['order_id'] ?? 0);
+            $carId = (int)($_POST['car_id'] ?? 0);
+            $qty = max(1, (int)($_POST['quantity'] ?? 1));
+            $unitPrice = normalizeMoney((float)($_POST['unit_price'] ?? 0));
+            $discount = normalizeMoney((float)($_POST['discount_amount'] ?? 0));
+            $total = normalizeMoney(($qty * $unitPrice) - $discount);
+
+            if ($detailId <= 0 || $orderId <= 0 || $carId <= 0) {
+                redirectDetail('invalid_data');
+            }
+
+            $stmt = $pdo->prepare('UPDATE order_details SET order_id = ?, car_id = ?, quantity = ?, unit_price = ?, discount_amount = ?, total_price = ? WHERE id = ?');
+            $stmt->execute([$orderId, $carId, $qty, $unitPrice, $discount, $total, $detailId]);
+            redirectDetail('updated');
+        }
+
+        if ($action === 'delete') {
+            $detailId = (int)($_POST['detail_id'] ?? 0);
+            if ($detailId <= 0) {
+                redirectDetail('invalid_data');
+            }
+            $stmt = $pdo->prepare('DELETE FROM order_details WHERE id = ?');
+            $stmt->execute([$detailId]);
+            redirectDetail('deleted');
+        }
+    } catch (Throwable $e) {
+        redirectDetail('db_error');
+    }
+}
+
+$q = trim((string)($_GET['q'] ?? ''));
+$carFilter = (int)($_GET['car_id'] ?? 0);
+$editId = (int)($_GET['edit'] ?? 0);
+
+$where = [];
+$params = [];
+
+if ($q !== '') {
+    $where[] = '(o.order_no LIKE :q OR c.name LIKE :q OR cu.full_name LIKE :q)';
+    $params[':q'] = '%' . $q . '%';
+}
+if ($carFilter > 0) {
+    $where[] = 'od.car_id = :car_id';
+    $params[':car_id'] = $carFilter;
+}
+
+$sql = '
+    SELECT od.*, o.order_no, o.customer_id,
+           c.name AS car_name,
+           cu.full_name AS customer_name
+    FROM order_details od
+    JOIN orders o ON o.id = od.order_id
+    JOIN cars c ON c.id = od.car_id
+    LEFT JOIN customers cu ON cu.id = o.customer_id
+';
+if ($where) {
+    $sql .= ' WHERE ' . implode(' AND ', $where);
+}
+$sql .= ' ORDER BY od.created_at DESC, od.id DESC';
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$details = $stmt->fetchAll();
+
+$orders = [];
+$cars = [];
+try {
+    $orders = $pdo->query('SELECT id, order_no FROM orders ORDER BY id DESC')->fetchAll();
+    $cars = $pdo->query('SELECT id, name, price FROM cars ORDER BY id DESC')->fetchAll();
+} catch (Throwable $ignored) {
+}
+
+$stats = ['lines' => 0, 'amount' => 0.0];
+try {
+    $stats['lines'] = (int)$pdo->query('SELECT COUNT(*) FROM order_details')->fetchColumn();
+    $stats['amount'] = (float)$pdo->query('SELECT COALESCE(SUM(total_price),0) FROM order_details')->fetchColumn();
+} catch (Throwable $ignored) {
+}
+
+$editDetail = null;
+if ($editId > 0) {
+    $s = $pdo->prepare('SELECT * FROM order_details WHERE id = ? LIMIT 1');
+    $s->execute([$editId]);
+    $editDetail = $s->fetch() ?: null;
+}
+
+$alertMap = [
+    'added' => ['success', 'Da them dong chi tiet hoa don.'],
+    'updated' => ['info', 'Da cap nhat dong chi tiet hoa don.'],
+    'deleted' => ['warning', 'Da xoa dong chi tiet hoa don.'],
+    'invalid_data' => ['danger', 'Du lieu khong hop le.'],
+    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title><?php echo $pageTitle; ?> - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
+<title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="../css/admin.css" rel="stylesheet">
 <link rel="icon" href="../img/logo.png" type="image/png">
+<style>
+  body { font-family: 'Inter', sans-serif !important; background:#f8fafc; }
+  .table > :not(caption) > * > * { padding: 14px 12px; vertical-align: middle; }
+  .mini-stat { background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+  .mini-stat h3 { margin:0; font-size:1.3rem; font-weight:800; }
+  .mini-stat p { margin:2px 0 0; color:#64748b; font-size:.8rem; }
+</style>
 </head>
-<body class="admin-body">
+<body>
+<div class="admin-wrapper" id="adminWrapper">
+  <?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+  <div class="admin-main">
+    <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
 
-<?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
-
-<div class="admin-main">
-  <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
-
-  <main class="admin-content">
-    <div class="admin-header d-flex justify-between align-items-center mb-4">
-      <h1 class="admin-title" style="margin:0;"><?php echo $pageTitle; ?></h1>
-    </div>
-
-    <!-- Filter bar -->
-    <div class="panel" style="margin-bottom:0; border-radius:var(--radius) var(--radius) 0 0">
-      <div class="panel-header" style="border-bottom:none; flex-wrap:wrap; gap:12px">
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-          <input type="text" class="filter-select" placeholder="Tra cứu Mã Hóa Đơn..." style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155; width:220px;">
-          <select class="filter-select" style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155">
-            <option>Tất cả xe</option>
-            <option>BMW X5 2024</option>
-            <option>Ford Mustang GT</option>
-          </select>
+    <main class="admin-content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="h4 fw-bold text-dark mb-1">Chi Tiet Hoa Don</h2>
+          <p class="text-secondary small mb-0">Quan ly cac dong san pham trong hoa don.</p>
         </div>
-        <button class="btn-add" style="background:var(--primary); color:white; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:6px;">
-          <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Thêm dòng xe vào HĐ
-        </button>
       </div>
-    </div>
-    
-    <!-- Table -->
-    <div class="panel" style="border-radius:0 0 var(--radius) var(--radius)">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th style="width:30px"><input type="checkbox"></th>
-            <th>Mã HĐ</th>
-            <th>Chi tiết xe</th>
-            <th>Số lượng</th>
-            <th>Đơn giá</th>
-            <th>Giảm giá</th>
-            <th>Thành tiền</th>
-            <th style="text-align:center;">Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>DH-001</strong></td>
-            <td><div style="display:flex; align-items:center; gap:8px;"><img src="../img/bmwx5.jpg" style="width:40px; height:24px; object-fit:cover; border-radius:4px;"> <span>BMW X5 2024</span></div></td>
-            <td>1</td>
-            <td>$65,000.00</td>
-            <td>$0.00</td>
-            <td><strong style="color:var(--primary)">$65,000.00</strong></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>DH-002</strong></td>
-            <td><div style="display:flex; align-items:center; gap:8px;"><img src="../img/ford mustang.jpg" style="width:40px; height:24px; object-fit:cover; border-radius:4px;"> <span>Ford Mustang GT</span></div></td>
-            <td>2</td>
-            <td>$58,000.00</td>
-            <td>$2,000.00</td>
-            <td><strong style="color:var(--primary)">$114,000.00</strong></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-6"><div class="mini-stat"><h3><?php echo $stats['lines']; ?></h3><p>Tong so dong chi tiet</p></div></div>
+        <div class="col-md-6"><div class="mini-stat"><h3>$<?php echo number_format($stats['amount'], 2); ?></h3><p>Tong gia tri chi tiet</p></div></div>
+      </div>
+
+      <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
+        <div class="alert alert-<?php echo $a[0]; ?> border-0 rounded-3"><?php echo $a[1]; ?></div>
+      <?php endif; ?>
+
+      <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
+        <div class="card-body">
+          <?php if (!$orders || !$cars): ?>
+            <div class="alert alert-warning mb-0">Can co du lieu Orders va Cars truoc khi tao chi tiet hoa don.</div>
+          <?php else: ?>
+            <form method="POST" class="row g-3 align-items-end">
+              <input type="hidden" name="action" value="<?php echo $editDetail ? 'edit' : 'add'; ?>">
+              <?php if ($editDetail): ?>
+                <input type="hidden" name="detail_id" value="<?php echo (int)$editDetail['id']; ?>">
+              <?php endif; ?>
+
+              <div class="col-md-3">
+                <label class="form-label small fw-bold text-secondary">Hoa don</label>
+                <select name="order_id" class="form-select bg-light border-0" required>
+                  <option value="">Chon hoa don</option>
+                  <?php foreach ($orders as $o): ?>
+                    <option value="<?php echo (int)$o['id']; ?>" <?php echo ((int)($editDetail['order_id'] ?? 0) === (int)$o['id']) ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars((string)$o['order_no'], ENT_QUOTES, 'UTF-8'); ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold text-secondary">Xe</label>
+                <select name="car_id" class="form-select bg-light border-0" required>
+                  <option value="">Chon xe</option>
+                  <?php foreach ($cars as $c): ?>
+                    <option value="<?php echo (int)$c['id']; ?>" <?php echo ((int)($editDetail['car_id'] ?? 0) === (int)$c['id']) ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars((string)$c['name'], ENT_QUOTES, 'UTF-8'); ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold text-secondary">So luong</label>
+                <input type="number" min="1" name="quantity" class="form-control bg-light border-0" required
+                       value="<?php echo htmlspecialchars((string)($editDetail['quantity'] ?? 1), ENT_QUOTES, 'UTF-8'); ?>">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold text-secondary">Don gia ($)</label>
+                <input type="number" min="0" step="0.01" name="unit_price" class="form-control bg-light border-0" required
+                       value="<?php echo htmlspecialchars((string)($editDetail['unit_price'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold text-secondary">Giam gia ($)</label>
+                <input type="number" min="0" step="0.01" name="discount_amount" class="form-control bg-light border-0"
+                       value="<?php echo htmlspecialchars((string)($editDetail['discount_amount'] ?? 0), ENT_QUOTES, 'UTF-8'); ?>">
+              </div>
+
+              <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary fw-bold px-4">
+                  <?php echo $editDetail ? 'Luu cap nhat' : 'Them chi tiet'; ?>
+                </button>
+                <?php if ($editDetail): ?>
+                  <a href="order_details.php" class="btn btn-light border fw-semibold">Huy sua</a>
+                <?php endif; ?>
+              </div>
+            </form>
+          <?php endif; ?>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm" style="border-radius:16px;">
+        <div class="card-body">
+          <form method="GET" class="row g-2 mb-3">
+            <div class="col-md-5">
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim theo ma HD, ten xe, khach hang..."
+                     value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-4">
+              <select name="car_id" class="form-select bg-light border-0">
+                <option value="0">Tat ca xe</option>
+                <?php foreach ($cars as $c): ?>
+                  <option value="<?php echo (int)$c['id']; ?>" <?php echo $carFilter === (int)$c['id'] ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars((string)$c['name'], ENT_QUOTES, 'UTF-8'); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+              <button type="submit" class="btn btn-outline-primary fw-semibold">Loc</button>
+              <a href="order_details.php" class="btn btn-outline-secondary fw-semibold">Reset</a>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem;letter-spacing:.5px;">
+                  <th>Ma HD</th>
+                  <th>Khach hang</th>
+                  <th>Xe</th>
+                  <th>So luong</th>
+                  <th>Don gia</th>
+                  <th>Giam gia</th>
+                  <th>Thanh tien</th>
+                  <th class="text-end">Thao tac</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (!$details): ?>
+                  <tr><td colspan="8" class="text-center text-muted py-4">Khong co dong chi tiet nao.</td></tr>
+                <?php else: ?>
+                  <?php foreach ($details as $d): ?>
+                    <tr>
+                      <td class="fw-semibold"><?php echo htmlspecialchars((string)$d['order_no'], ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?php echo htmlspecialchars((string)($d['customer_name'] ?? '---'), ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?php echo htmlspecialchars((string)$d['car_name'], ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td><?php echo (int)$d['quantity']; ?></td>
+                      <td>$<?php echo number_format((float)$d['unit_price'], 2); ?></td>
+                      <td>$<?php echo number_format((float)$d['discount_amount'], 2); ?></td>
+                      <td class="fw-semibold text-primary">$<?php echo number_format((float)$d['total_price'], 2); ?></td>
+                      <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="order_details.php?edit=<?php echo (int)$d['id']; ?>">Sua</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa dong chi tiet nay?');">
+                          <input type="hidden" name="action" value="delete">
+                          <input type="hidden" name="detail_id" value="<?php echo (int)$d['id']; ?>">
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
-
-

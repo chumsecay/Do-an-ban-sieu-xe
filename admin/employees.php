@@ -1,117 +1,344 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
 requireAdminOrRedirect('../index.php?forbidden=1');
+require_once __DIR__ . '/../config/database.php';
+
 $adminPage = 'employees';
-$pageTitle = 'Nhân viên';
+$pageTitle = 'Nhan vien';
 $appName = env('APP_NAME', 'FLCar');
+$pdo = getDBConnection();
+
+function redirectEmployee(string $msg): void
+{
+    header('Location: employees.php?msg=' . urlencode($msg));
+    exit;
+}
+
+function nextEmployeeCode(PDO $pdo): string
+{
+    $row = $pdo->query('SELECT code FROM employees WHERE code LIKE "NV-%" ORDER BY id DESC LIMIT 1')->fetch();
+    if (!$row || empty($row['code'])) {
+        return 'NV-001';
+    }
+    $num = (int)preg_replace('/[^0-9]/', '', (string)$row['code']);
+    return 'NV-' . str_pad((string)($num + 1), 3, '0', STR_PAD_LEFT);
+}
+
+$msg = (string)($_GET['msg'] ?? '');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string)($_POST['action'] ?? '');
+
+    try {
+        if ($action === 'add') {
+            $code = trim((string)($_POST['code'] ?? ''));
+            $fullName = trim((string)($_POST['full_name'] ?? ''));
+            $email = trim((string)($_POST['email'] ?? ''));
+            $phone = trim((string)($_POST['phone'] ?? ''));
+            $position = trim((string)($_POST['position'] ?? ''));
+            $status = (string)($_POST['status'] ?? 'active');
+
+            if ($fullName === '' || $email === '') {
+                redirectEmployee('invalid_data');
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                redirectEmployee('invalid_email');
+            }
+            if ($status !== 'active' && $status !== 'inactive') {
+                $status = 'active';
+            }
+            if ($code === '') {
+                $code = nextEmployeeCode($pdo);
+            }
+
+            $stmt = $pdo->prepare('INSERT INTO employees (code, full_name, email, phone, position, status) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$code, $fullName, $email, $phone !== '' ? $phone : null, $position !== '' ? $position : null, $status]);
+            redirectEmployee('added');
+        }
+
+        if ($action === 'edit') {
+            $id = (int)($_POST['employee_id'] ?? 0);
+            $code = trim((string)($_POST['code'] ?? ''));
+            $fullName = trim((string)($_POST['full_name'] ?? ''));
+            $email = trim((string)($_POST['email'] ?? ''));
+            $phone = trim((string)($_POST['phone'] ?? ''));
+            $position = trim((string)($_POST['position'] ?? ''));
+            $status = (string)($_POST['status'] ?? 'active');
+
+            if ($id <= 0 || $fullName === '' || $email === '' || $code === '') {
+                redirectEmployee('invalid_data');
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                redirectEmployee('invalid_email');
+            }
+            if ($status !== 'active' && $status !== 'inactive') {
+                $status = 'active';
+            }
+
+            $stmt = $pdo->prepare('UPDATE employees SET code = ?, full_name = ?, email = ?, phone = ?, position = ?, status = ? WHERE id = ?');
+            $stmt->execute([$code, $fullName, $email, $phone !== '' ? $phone : null, $position !== '' ? $position : null, $status, $id]);
+            redirectEmployee('updated');
+        }
+
+        if ($action === 'delete') {
+            $id = (int)($_POST['employee_id'] ?? 0);
+            if ($id <= 0) {
+                redirectEmployee('invalid_data');
+            }
+            $stmt = $pdo->prepare('DELETE FROM employees WHERE id = ?');
+            $stmt->execute([$id]);
+            redirectEmployee('deleted');
+        }
+    } catch (Throwable $e) {
+        if (str_contains(strtolower($e->getMessage()), 'duplicate')) {
+            redirectEmployee('duplicate');
+        }
+        redirectEmployee('db_error');
+    }
+}
+
+$q = trim((string)($_GET['q'] ?? ''));
+$statusFilter = (string)($_GET['status'] ?? '');
+$positionFilter = trim((string)($_GET['position'] ?? ''));
+$editId = (int)($_GET['edit'] ?? 0);
+
+$where = [];
+$params = [];
+if ($q !== '') {
+    $where[] = '(full_name LIKE :q OR code LIKE :q OR email LIKE :q OR phone LIKE :q)';
+    $params[':q'] = '%' . $q . '%';
+}
+if ($statusFilter === 'active' || $statusFilter === 'inactive') {
+    $where[] = 'status = :status';
+    $params[':status'] = $statusFilter;
+}
+if ($positionFilter !== '') {
+    $where[] = 'position LIKE :position';
+    $params[':position'] = '%' . $positionFilter . '%';
+}
+
+$sql = 'SELECT * FROM employees';
+if ($where) {
+    $sql .= ' WHERE ' . implode(' AND ', $where);
+}
+$sql .= ' ORDER BY created_at DESC, id DESC';
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$employees = $stmt->fetchAll();
+
+$stats = ['total' => 0, 'active' => 0, 'inactive' => 0];
+try {
+    $stats['total'] = (int)$pdo->query('SELECT COUNT(*) FROM employees')->fetchColumn();
+    $stats['active'] = (int)$pdo->query("SELECT COUNT(*) FROM employees WHERE status='active'")->fetchColumn();
+    $stats['inactive'] = $stats['total'] - $stats['active'];
+} catch (Throwable $ignored) {
+}
+
+$positions = [];
+try {
+    $positions = $pdo->query("SELECT DISTINCT COALESCE(position, '') AS position FROM employees ORDER BY position ASC")->fetchAll();
+} catch (Throwable $ignored) {
+}
+
+$editEmployee = null;
+if ($editId > 0) {
+    $s = $pdo->prepare('SELECT * FROM employees WHERE id = ? LIMIT 1');
+    $s->execute([$editId]);
+    $editEmployee = $s->fetch() ?: null;
+}
+
+$alertMap = [
+    'added' => ['success', 'Da them nhan vien moi.'],
+    'updated' => ['info', 'Da cap nhat thong tin nhan vien.'],
+    'deleted' => ['warning', 'Da xoa nhan vien.'],
+    'duplicate' => ['danger', 'Ma nhan vien hoac email da ton tai.'],
+    'invalid_email' => ['danger', 'Email khong hop le.'],
+    'invalid_data' => ['danger', 'Du lieu khong hop le.'],
+    'db_error' => ['danger', 'Co loi CSDL khi xu ly thao tac.'],
+];
 ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title><?php echo $pageTitle; ?> - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
+<title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="../css/admin.css" rel="stylesheet">
 <link rel="icon" href="../img/logo.png" type="image/png">
+<style>
+  body { font-family: 'Inter', sans-serif !important; background:#f8fafc; }
+  .table > :not(caption) > * > * { padding: 14px 12px; vertical-align: middle; }
+  .mini-stat { background:#fff; border-radius:12px; padding:16px 18px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+  .mini-stat h3 { margin:0; font-size:1.3rem; font-weight:800; }
+  .mini-stat p { margin:2px 0 0; color:#64748b; font-size:.8rem; }
+  .avatar { width:34px; height:34px; border-radius:50%; background:#e2e8f0; color:#334155; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; }
+</style>
 </head>
-<body class="admin-body">
+<body>
+<div class="admin-wrapper" id="adminWrapper">
+  <?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
+  <div class="admin-main">
+    <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
 
-<?php include __DIR__ . '/../partials/admin-sidebar.php'; ?>
-
-<div class="admin-main">
-  <?php include __DIR__ . '/../partials/admin-topbar.php'; ?>
-
-  <main class="admin-content">
-
-    <!-- Quick Stats -->
-    <div class="stat-cards">
-      <div class="stat-card">
-        <div class="stat-info"><h3>12</h3><p>Tổng NV</p></div>
-        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>10</h3><p>Đang hoạt động</p></div>
-        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-info"><h3>2</h3><p>Tạm nghỉ / Đã nghỉ</p></div>
-        <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
-      </div>
-    </div>
-
-    <!-- Filter bar -->
-    <div class="panel" style="margin-bottom:0; border-radius:var(--radius) var(--radius) 0 0">
-      <div class="panel-header" style="border-bottom:none; flex-wrap:wrap; gap:12px">
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-          <input type="text" class="filter-select" placeholder="Tra cứu Tên, SĐT, Email..." style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155; width:220px;">
-          <select class="filter-select" style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 14px; font-size:.82rem; background:#f8fafc; color:#334155">
-            <option>Tất cả bộ phận</option>
-            <option>Bán hàng</option>
-            <option>Kỹ thuật</option>
-            <option>Thu ngân</option>
-          </select>
+    <main class="admin-content p-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="h4 fw-bold text-dark mb-1">Quan Ly Nhan Vien</h2>
+          <p class="text-secondary small mb-0">Quan ly thong tin, trang thai va vi tri nhan su.</p>
         </div>
-        <button class="btn-add" style="background:var(--primary); color:white; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:6px;">
-          <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Thêm nhân viên
-        </button>
       </div>
-    </div>
-    
-    <!-- Table -->
-    <div class="panel" style="border-radius:0 0 var(--radius) var(--radius)">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th style="width:30px"><input type="checkbox"></th>
-            <th>Mã NV</th>
-            <th>Họ Tên</th>
-            <th>Liên hệ</th>
-            <th>Vị trí</th>
-            <th>Trạng thái</th>
-            <th style="text-align:center;">Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>NV-001</strong></td>
-            <td><div style="display:flex; align-items:center; gap:10px;">
-              <div style="width:32px; height:32px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; font-weight:bold; color:#64748b">T</div>
-              <span>Trần Văn A</span>
-            </div></td>
-            <td>0901234567<br><small style="color:#64748b;">a.tran@flcar.vn</small></td>
-            <td>Bán hàng</td>
-            <td><span class="badge-status badge-available">Đang hoạt động</span></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>NV-002</strong></td>
-            <td><div style="display:flex; align-items:center; gap:10px;">
-              <div style="width:32px; height:32px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; font-weight:bold; color:#64748b">B</div>
-              <span>Nguyễn Thị B</span>
-            </div></td>
-            <td>0907654321<br><small style="color:#64748b;">b.nguyen@flcar.vn</small></td>
-            <td>Thu ngân</td>
-            <td><span class="badge-status badge-sold">Đã nghỉ</span></td>
-            <td><div class="action-btns" style="justify-content:center;">
-              <button class="action-btn" title="Sửa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button class="action-btn delete" title="Xoá"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
-            </div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['total']; ?></h3><p>Tong nhan vien</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['active']; ?></h3><p>Dang hoat dong</p></div></div>
+        <div class="col-md-4"><div class="mini-stat"><h3><?php echo $stats['inactive']; ?></h3><p>Tam nghi / da nghi</p></div></div>
+      </div>
+
+      <?php if ($msg !== '' && isset($alertMap[$msg])): $a = $alertMap[$msg]; ?>
+        <div class="alert alert-<?php echo $a[0]; ?> border-0 rounded-3"><?php echo $a[1]; ?></div>
+      <?php endif; ?>
+
+      <div class="card border-0 shadow-sm mb-4" style="border-radius:16px;">
+        <div class="card-body">
+          <form method="POST" class="row g-3 align-items-end">
+            <input type="hidden" name="action" value="<?php echo $editEmployee ? 'edit' : 'add'; ?>">
+            <?php if ($editEmployee): ?>
+              <input type="hidden" name="employee_id" value="<?php echo (int)$editEmployee['id']; ?>">
+            <?php endif; ?>
+
+            <div class="col-md-2">
+              <label class="form-label small fw-bold text-secondary">Ma NV</label>
+              <input type="text" name="code" class="form-control bg-light border-0"
+                     value="<?php echo htmlspecialchars((string)($editEmployee['code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                     placeholder="<?php echo htmlspecialchars(nextEmployeeCode($pdo), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold text-secondary">Ho ten</label>
+              <input type="text" name="full_name" class="form-control bg-light border-0" required
+                     value="<?php echo htmlspecialchars((string)($editEmployee['full_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold text-secondary">Email</label>
+              <input type="email" name="email" class="form-control bg-light border-0" required
+                     value="<?php echo htmlspecialchars((string)($editEmployee['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-bold text-secondary">So dien thoai</label>
+              <input type="text" name="phone" class="form-control bg-light border-0"
+                     value="<?php echo htmlspecialchars((string)($editEmployee['phone'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-bold text-secondary">Trang thai</label>
+              <select name="status" class="form-select bg-light border-0">
+                <option value="active" <?php echo (!$editEmployee || ($editEmployee['status'] ?? 'active') === 'active') ? 'selected' : ''; ?>>Hoat dong</option>
+                <option value="inactive" <?php echo ($editEmployee && ($editEmployee['status'] ?? '') === 'inactive') ? 'selected' : ''; ?>>Khong hoat dong</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold text-secondary">Vi tri</label>
+              <input type="text" name="position" class="form-control bg-light border-0" placeholder="Vi du: Ban hang, Ky thuat"
+                     value="<?php echo htmlspecialchars((string)($editEmployee['position'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button type="submit" class="btn btn-primary fw-bold px-4"><?php echo $editEmployee ? 'Luu cap nhat' : 'Them nhan vien'; ?></button>
+              <?php if ($editEmployee): ?>
+                <a href="employees.php" class="btn btn-light border fw-semibold">Huy sua</a>
+              <?php endif; ?>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm" style="border-radius:16px;">
+        <div class="card-body">
+          <form method="GET" class="row g-2 mb-3">
+            <div class="col-md-4">
+              <input type="text" name="q" class="form-control bg-light border-0" placeholder="Tim theo ma, ten, email, sdt..."
+                     value="<?php echo htmlspecialchars($q, ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div class="col-md-3">
+              <select name="status" class="form-select bg-light border-0">
+                <option value="">Tat ca trang thai</option>
+                <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Hoat dong</option>
+                <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>Khong hoat dong</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select name="position" class="form-select bg-light border-0">
+                <option value="">Tat ca vi tri</option>
+                <?php foreach ($positions as $pos): $p = trim((string)$pos['position']); if ($p === '') { continue; } ?>
+                  <option value="<?php echo htmlspecialchars($p, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $positionFilter === $p ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($p, ENT_QUOTES, 'UTF-8'); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+              <button type="submit" class="btn btn-outline-primary fw-semibold">Loc</button>
+              <a href="employees.php" class="btn btn-outline-secondary fw-semibold">Reset</a>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table align-middle mb-0">
+              <thead>
+                <tr class="text-uppercase text-secondary bg-light" style="font-size:.75rem;letter-spacing:.5px;">
+                  <th>Ma NV</th>
+                  <th>Ho ten</th>
+                  <th>Lien he</th>
+                  <th>Vi tri</th>
+                  <th>Trang thai</th>
+                  <th class="text-end">Thao tac</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (!$employees): ?>
+                  <tr><td colspan="6" class="text-center text-muted py-4">Khong co du lieu nhan vien.</td></tr>
+                <?php else: ?>
+                  <?php foreach ($employees as $e): ?>
+                    <tr>
+                      <td class="fw-semibold"><?php echo htmlspecialchars((string)$e['code'], ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <div class="avatar"><?php echo htmlspecialchars(strtoupper(substr((string)$e['full_name'], 0, 1)), ENT_QUOTES, 'UTF-8'); ?></div>
+                          <span class="fw-semibold"><?php echo htmlspecialchars((string)$e['full_name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                      </td>
+                      <td>
+                        <div><?php echo htmlspecialchars((string)$e['email'], ENT_QUOTES, 'UTF-8'); ?></div>
+                        <small class="text-secondary"><?php echo htmlspecialchars((string)($e['phone'] ?? '---'), ENT_QUOTES, 'UTF-8'); ?></small>
+                      </td>
+                      <td><?php echo htmlspecialchars((string)($e['position'] ?? '---'), ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td>
+                        <?php if (($e['status'] ?? '') === 'active'): ?>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle">Hoat dong</span>
+                        <?php else: ?>
+                          <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Khong hoat dong</span>
+                        <?php endif; ?>
+                      </td>
+                      <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="employees.php?edit=<?php echo (int)$e['id']; ?>">Sua</a>
+                        <form method="POST" class="d-inline" onsubmit="return confirm('Xoa nhan vien nay?');">
+                          <input type="hidden" name="action" value="delete">
+                          <input type="hidden" name="employee_id" value="<?php echo (int)$e['id']; ?>">
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Xoa</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
-
-

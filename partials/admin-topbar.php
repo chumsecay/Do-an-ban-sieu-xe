@@ -20,3 +20,11 @@
     <button class="avatar-btn" title="Admin">A</button>
   </div>
 </header>
+<script>
+function toggleSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (sidebar) sidebar.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('show');
+}
+</script>

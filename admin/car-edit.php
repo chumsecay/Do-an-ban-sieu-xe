@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . '/../bootstrap/env.php';
 require_once __DIR__ . '/../bootstrap/auth.php';
 requireAdminOrRedirect('../index.php?forbidden=1');
@@ -8,6 +8,21 @@ $adminPage = 'cars';
 $appName = env('APP_NAME', 'FLCar');
 $pdo = getDBConnection();
 $msg = $_GET['msg'] ?? '';
+
+// Some environments were missing this table while UI already depends on it.
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS car_specs (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        car_id BIGINT UNSIGNED NOT NULL,
+        spec_key VARCHAR(120) NOT NULL,
+        spec_value VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_car_specs_car_key (car_id, spec_key),
+        KEY idx_car_specs_car (car_id),
+        CONSTRAINT fk_car_specs_car FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB
+");
 
 $carId = (int) ($_GET['id'] ?? 0);
 if ($carId <= 0) {
