@@ -151,6 +151,7 @@ try {
             <h4 class="h5 fw-bold mb-3">Truy Cập Nhanh</h4>
             <a href="orders.php" class="btn btn-outline-dark w-100 mb-2">Đơn mua</a>
             <a href="cart.php" class="btn btn-outline-dark w-100 mb-2">Giỏ hàng</a>
+            <a href="support.php" class="btn btn-outline-dark w-100 mb-2">Hỗ trợ</a>
             <?php if (isAdminLoggedIn()): ?>
               <a href="../admin/index.php" class="btn btn-success w-100 mb-2">Quản trị</a>
             <?php endif; ?>

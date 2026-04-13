@@ -152,6 +152,7 @@ $alertMap = [
               <thead>
                 <tr class="text-uppercase text-secondary bg-light" style="font-size:0.75rem;letter-spacing:0.5px;">
                   <th>Mã đơn</th>
+                  <th>Giao hang</th>
                   <th>Xe</th>
                   <th>Số lượng</th>
                   <th>Tổng tiền</th>
@@ -162,15 +163,25 @@ $alertMap = [
               </thead>
               <tbody>
                 <?php if (!$orders): ?>
-                  <tr><td colspan="7" class="text-center py-5 text-muted">Chưa có đơn mua nào.</td></tr>
+                  <tr><td colspan="8" class="text-center py-5 text-muted">Chưa có đơn mua nào.</td></tr>
                 <?php else: ?>
                   <?php foreach ($orders as $o): ?>
                     <?php
                     $orderStatus = normalizeOrderStatus((string)$o['status']);
                     $paymentStatus = (string)($o['payment_status'] ?? 'unpaid');
+                    $shippingName = trim((string)($o['shipping_full_name'] ?? ''));
+                    $shippingPhone = trim((string)($o['shipping_phone'] ?? ''));
+                    $shippingAddress = trim((string)($o['shipping_address'] ?? ''));
                     ?>
                     <tr>
                       <td class="fw-bold"><?php echo htmlspecialchars((string)$o['order_no'], ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td>
+                        <div class="fw-semibold"><?php echo htmlspecialchars($shippingName !== '' ? $shippingName : (string)$customer['full_name'], ENT_QUOTES, 'UTF-8'); ?></div>
+                        <div class="text-secondary small"><?php echo htmlspecialchars($shippingPhone !== '' ? $shippingPhone : (string)($customer['phone'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></div>
+                        <?php if ($shippingAddress !== ''): ?>
+                          <div class="text-secondary small"><?php echo htmlspecialchars($shippingAddress, ENT_QUOTES, 'UTF-8'); ?></div>
+                        <?php endif; ?>
+                      </td>
                       <td><?php echo htmlspecialchars((string)$o['car_name'], ENT_QUOTES, 'UTF-8'); ?></td>
                       <td><?php echo (int)$o['quantity']; ?></td>
                       <td class="fw-semibold">$<?php echo number_format((float)$o['total_amount'], 2); ?></td>

@@ -109,6 +109,62 @@ if (!function_exists('shopEnsureCustomersBalanceColumn')) {
     }
 }
 
+if (!function_exists('shopEnsureCustomerAuthColumns')) {
+    function shopEnsureCustomerAuthColumns(PDO $pdo): void
+    {
+        $passwordCol = $pdo->query("SHOW COLUMNS FROM customers LIKE 'password_hash'");
+        if (!$passwordCol->fetch()) {
+            $pdo->exec("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
+        }
+
+        $activeCol = $pdo->query("SHOW COLUMNS FROM customers LIKE 'is_active'");
+        if (!$activeCol->fetch()) {
+            $pdo->exec("ALTER TABLE customers ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER balance");
+        }
+
+        $lastLoginCol = $pdo->query("SHOW COLUMNS FROM customers LIKE 'last_login_at'");
+        if (!$lastLoginCol->fetch()) {
+            $pdo->exec("ALTER TABLE customers ADD COLUMN last_login_at DATETIME NULL AFTER is_active");
+        }
+    }
+}
+
+if (!function_exists('shopEnsureOrderShippingColumns')) {
+    function shopEnsureOrderShippingColumns(PDO $pdo): void
+    {
+        $shippingNameCol = $pdo->query("SHOW COLUMNS FROM orders LIKE 'shipping_full_name'");
+        if (!$shippingNameCol->fetch()) {
+            $pdo->exec("ALTER TABLE orders ADD COLUMN shipping_full_name VARCHAR(150) NULL AFTER note");
+        }
+
+        $shippingPhoneCol = $pdo->query("SHOW COLUMNS FROM orders LIKE 'shipping_phone'");
+        if (!$shippingPhoneCol->fetch()) {
+            $pdo->exec("ALTER TABLE orders ADD COLUMN shipping_phone VARCHAR(30) NULL AFTER shipping_full_name");
+        }
+
+        $shippingAddressCol = $pdo->query("SHOW COLUMNS FROM orders LIKE 'shipping_address'");
+        if (!$shippingAddressCol->fetch()) {
+            $pdo->exec("ALTER TABLE orders ADD COLUMN shipping_address VARCHAR(255) NULL AFTER shipping_phone");
+        }
+
+        $shippingNoteCol = $pdo->query("SHOW COLUMNS FROM orders LIKE 'shipping_note'");
+        if (!$shippingNoteCol->fetch()) {
+            $pdo->exec("ALTER TABLE orders ADD COLUMN shipping_note VARCHAR(255) NULL AFTER shipping_address");
+        }
+    }
+}
+
+if (!function_exists('shopStringLength')) {
+    function shopStringLength(string $value): int
+    {
+        if (function_exists('mb_strlen')) {
+            return (int)mb_strlen($value);
+        }
+
+        return strlen($value);
+    }
+}
+
 if (!function_exists('shopGetCurrentCustomer')) {
     function shopGetCurrentCustomer(PDO $pdo, bool $autoCreate = true): ?array
     {
@@ -118,13 +174,17 @@ if (!function_exists('shopGetCurrentCustomer')) {
         }
 
         shopEnsureCustomersBalanceColumn($pdo);
+        shopEnsureCustomerAuthColumns($pdo);
 
         $customerId = (int)($_SESSION['customer_id'] ?? 0);
         if ($customerId > 0) {
-            $stmt = $pdo->prepare('SELECT id, full_name, email, balance FROM customers WHERE id = ? LIMIT 1');
+            $stmt = $pdo->prepare('SELECT id, full_name, email, phone, balance, is_active FROM customers WHERE id = ? LIMIT 1');
             $stmt->execute([$customerId]);
             $row = $stmt->fetch();
             if ($row) {
+                if ((int)($row['is_active'] ?? 1) !== 1) {
+                    return null;
+                }
                 $_SESSION['user_balance'] = (float)($row['balance'] ?? 0);
                 return $row;
             }
@@ -136,10 +196,13 @@ if (!function_exists('shopGetCurrentCustomer')) {
             return null;
         }
 
-        $find = $pdo->prepare('SELECT id, full_name, email, balance FROM customers WHERE LOWER(email) = LOWER(?) LIMIT 1');
+        $find = $pdo->prepare('SELECT id, full_name, email, phone, balance, is_active FROM customers WHERE LOWER(email) = LOWER(?) LIMIT 1');
         $find->execute([$email]);
         $row = $find->fetch();
         if ($row) {
+            if ((int)($row['is_active'] ?? 1) !== 1) {
+                return null;
+            }
             $_SESSION['customer_id'] = (int)$row['id'];
             $_SESSION['user_balance'] = (float)($row['balance'] ?? 0);
             return $row;
@@ -150,7 +213,7 @@ if (!function_exists('shopGetCurrentCustomer')) {
         }
 
         $insert = $pdo->prepare('INSERT INTO customers (full_name, email, tier, balance) VALUES (?, ?, ?, 0)');
-            $insert->execute([$fullName !== '' ? $fullName : 'Khách hàng', $email, 'new']);
+        $insert->execute([$fullName !== '' ? $fullName : 'Khách hàng', $email, 'new']);
         $newId = (int)$pdo->lastInsertId();
 
         $_SESSION['customer_id'] = $newId;
@@ -158,9 +221,11 @@ if (!function_exists('shopGetCurrentCustomer')) {
 
         return [
             'id' => $newId,
-                'full_name' => $fullName !== '' ? $fullName : 'Khách hàng',
+            'full_name' => $fullName !== '' ? $fullName : 'Khách hàng',
             'email' => $email,
+            'phone' => null,
             'balance' => 0.0,
+            'is_active' => 1,
         ];
     }
 }
@@ -262,8 +327,55 @@ if (!function_exists('shopBuildCartDetail')) {
     }
 }
 
+if (!function_exists('shopNormalizeShippingData')) {
+    function shopNormalizeShippingData(array $shippingInput, array $customer): array
+    {
+        $fullName = trim((string)($shippingInput['full_name'] ?? ''));
+        if ($fullName === '') {
+            $fullName = trim((string)($customer['full_name'] ?? ''));
+        }
+
+        $phone = trim((string)($shippingInput['phone'] ?? ''));
+        if ($phone === '') {
+            $phone = trim((string)($customer['phone'] ?? ''));
+        }
+
+        $address = trim((string)($shippingInput['address'] ?? ''));
+        $note = trim((string)($shippingInput['note'] ?? ''));
+
+        if ($fullName === '') {
+            return ['ok' => false, 'code' => 'shipping_name_required', 'message' => 'Vui long nhap ten nguoi nhan.'];
+        }
+        if ($phone === '') {
+            return ['ok' => false, 'code' => 'shipping_phone_required', 'message' => 'Vui long nhap so dien thoai nguoi nhan.'];
+        }
+        if (!preg_match('/^[0-9+\\-\\s().]{8,20}$/', $phone)) {
+            return ['ok' => false, 'code' => 'shipping_phone_invalid', 'message' => 'So dien thoai nguoi nhan khong hop le.'];
+        }
+        if ($address === '') {
+            return ['ok' => false, 'code' => 'shipping_address_required', 'message' => 'Vui long nhap dia chi giao xe.'];
+        }
+        if (shopStringLength($address) > 255) {
+            return ['ok' => false, 'code' => 'shipping_address_too_long', 'message' => 'Dia chi giao xe qua dai.'];
+        }
+        if (shopStringLength($note) > 255) {
+            return ['ok' => false, 'code' => 'shipping_note_too_long', 'message' => 'Ghi chu giao hang qua dai.'];
+        }
+
+        return [
+            'ok' => true,
+            'data' => [
+                'full_name' => $fullName,
+                'phone' => $phone,
+                'address' => $address,
+                'note' => $note,
+            ],
+        ];
+    }
+}
+
 if (!function_exists('shopCheckoutCart')) {
-    function shopCheckoutCart(PDO $pdo, string $paymentMethod = 'cod'): array
+    function shopCheckoutCart(PDO $pdo, string $paymentMethod = 'cod', array $shippingInput = []): array
     {
         $paymentMethod = in_array($paymentMethod, ['wallet', 'cod'], true) ? $paymentMethod : 'cod';
         $cart = shopBuildCartDetail($pdo);
@@ -283,14 +395,36 @@ if (!function_exists('shopCheckoutCart')) {
 
         $customer = shopGetCurrentCustomer($pdo, true);
         if (!$customer) {
-            return ['ok' => false, 'code' => 'customer_missing', 'message' => 'Không tìm thấy tài khoản khách hàng để tạo đơn.'];
+            return ['ok' => false, 'code' => 'customer_missing', 'message' => 'Khong tim thay tai khoan khach hang de tao don.'];
         }
+
+        $shipping = shopNormalizeShippingData($shippingInput, $customer);
+        if (!(bool)($shipping['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'code' => (string)($shipping['code'] ?? 'shipping_invalid'),
+                'message' => (string)($shipping['message'] ?? 'Thong tin giao hang khong hop le.'),
+            ];
+        }
+        $shippingData = (array)($shipping['data'] ?? []);
 
         $totalAmount = (float)$cart['subtotal'];
         $createdOrders = 0;
 
         try {
+            shopEnsureOrderShippingColumns($pdo);
             $pdo->beginTransaction();
+
+            $syncCustomer = $pdo->prepare('
+                UPDATE customers
+                SET full_name = ?, phone = COALESCE(NULLIF(phone, ""), ?)
+                WHERE id = ?
+            ');
+            $syncCustomer->execute([
+                (string)$shippingData['full_name'],
+                (string)$shippingData['phone'],
+                (int)$customer['id'],
+            ]);
 
             if ($paymentMethod === 'wallet') {
                 $lockCustomer = $pdo->prepare('SELECT id, balance FROM customers WHERE id = ? FOR UPDATE');
@@ -332,8 +466,8 @@ if (!function_exists('shopCheckoutCart')) {
 
                 $insertOrder = $pdo->prepare('
                     INSERT INTO orders
-                    (order_no, customer_id, car_id, order_type, quantity, unit_price, total_amount, status, payment_status, note, created_by_admin_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                    (order_no, customer_id, car_id, order_type, quantity, unit_price, total_amount, status, payment_status, note, shipping_full_name, shipping_phone, shipping_address, shipping_note, created_by_admin_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
                 ');
                 $insertOrder->execute([
                     $orderNo,
@@ -346,6 +480,10 @@ if (!function_exists('shopCheckoutCart')) {
                     $orderStatus,
                     $paymentStatus,
                     'Checkout tu website',
+                    (string)$shippingData['full_name'],
+                    (string)$shippingData['phone'],
+                    (string)$shippingData['address'],
+                    ((string)$shippingData['note'] !== '' ? (string)$shippingData['note'] : null),
                 ]);
 
                 $newStock = max(0, $stock - $qty);

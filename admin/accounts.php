@@ -36,6 +36,24 @@ function ensureCustomerBalanceColumn(PDO $pdo): void
     }
 }
 
+function ensureCustomerAuthColumns(PDO $pdo): void
+{
+    $passwordCol = $pdo->query("SHOW COLUMNS FROM customers LIKE 'password_hash'");
+    if (!$passwordCol->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
+    }
+
+    $activeCol = $pdo->query("SHOW COLUMNS FROM customers LIKE 'is_active'");
+    if (!$activeCol->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER balance");
+    }
+
+    $lastLoginCol = $pdo->query("SHOW COLUMNS FROM customers LIKE 'last_login_at'");
+    if (!$lastLoginCol->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN last_login_at DATETIME NULL AFTER is_active");
+    }
+}
+
 function ensureAdminEmployeeColumn(PDO $pdo): void
 {
     $col = $pdo->query("SHOW COLUMNS FROM admins LIKE 'employee_id'");
@@ -67,6 +85,7 @@ function normalizeAdminRole(string $role): string
 $schemaError = '';
 try {
     ensureCustomerBalanceColumn($pdo);
+    ensureCustomerAuthColumns($pdo);
     ensureAdminEmployeeColumn($pdo);
 } catch (Throwable $e) {
     $schemaError = 'Không thể cập nhật CSDL cho module tài khoản.';
@@ -209,6 +228,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($action === 'set_customer_active') {
+            $customerId = (int)($_POST['customer_id'] ?? 0);
+            $isActive = (int)($_POST['is_active'] ?? 1) === 1 ? 1 : 0;
+            if ($customerId <= 0) {
+                redirectAccounts('invalid_data');
+            }
+
+            $stmt = $pdo->prepare('UPDATE customers SET is_active = ? WHERE id = ?');
+            $stmt->execute([$isActive, $customerId]);
+            redirectAccounts($isActive === 1 ? 'customer_unlocked' : 'customer_locked');
+        }
+
         if ($action === 'delete_employee') {
             $employeeId = (int)($_POST['employee_id'] ?? 0);
             if ($employeeId <= 0) {
@@ -256,6 +287,8 @@ try {
 $alerts = [
     'customer_added' => ['success', 'Đã thêm tài khoản khách hàng.'],
     'customer_deleted' => ['warning', 'Đã xóa khách hàng.'],
+    'customer_locked' => ['warning', 'Đã khóa tài khoản khách hàng.'],
+    'customer_unlocked' => ['success', 'Đã mở khóa tài khoản khách hàng.'],
     'customer_delete_blocked' => ['danger', 'Không thể xóa khách hàng này vì đã có dữ liệu liên quan.'],
     'employee_added' => ['success', 'Đã thêm tài khoản nhân viên.'],
     'employee_deleted' => ['warning', 'Đã xóa nhân viên.'],
@@ -421,6 +454,7 @@ $alerts = [
                   <th>Họ tên</th>
                   <th>Liên hệ</th>
                   <th>Tier</th>
+                  <th>Trạng thái</th>
                   <th>Số dư</th>
                   <th>Đơn hàng</th>
                   <th class="text-end">Thao tác</th>
@@ -428,7 +462,7 @@ $alerts = [
               </thead>
               <tbody>
                 <?php if (!$customers): ?>
-                  <tr><td colspan="7" class="text-center py-4 text-muted">Chưa có khách hàng.</td></tr>
+                  <tr><td colspan="8" class="text-center py-4 text-muted">Chưa có khách hàng.</td></tr>
                 <?php else: ?>
                   <?php foreach ($customers as $c): ?>
                     <tr>
@@ -439,6 +473,13 @@ $alerts = [
                         <small class="text-secondary"><?php echo htmlspecialchars((string)($c['phone'] ?? '---'), ENT_QUOTES, 'UTF-8'); ?></small>
                       </td>
                       <td><?php echo htmlspecialchars((string)($c['tier'] ?? 'new'), ENT_QUOTES, 'UTF-8'); ?></td>
+                      <td>
+                        <?php if ((int)($c['is_active'] ?? 1) === 1): ?>
+                          <span class="badge bg-success-subtle text-success border border-success-subtle">Đang mở</span>
+                        <?php else: ?>
+                          <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Đã khóa</span>
+                        <?php endif; ?>
+                      </td>
                       <td class="fw-bold">$<?php echo number_format((float)($c['balance'] ?? 0), 2); ?></td>
                       <td><?php echo (int)($c['order_count'] ?? 0); ?></td>
                       <td class="text-end">
@@ -447,6 +488,14 @@ $alerts = [
                           <input type="hidden" name="customer_id" value="<?php echo (int)$c['id']; ?>">
                           <input type="number" name="delta" step="0.01" class="form-control form-control-sm" style="width:100px" placeholder="+/-">
                           <button type="submit" class="btn btn-sm btn-outline-success">Số dư</button>
+                        </form>
+                        <form method="POST" class="d-inline">
+                          <input type="hidden" name="action" value="set_customer_active">
+                          <input type="hidden" name="customer_id" value="<?php echo (int)$c['id']; ?>">
+                          <input type="hidden" name="is_active" value="<?php echo (int)($c['is_active'] ?? 1) === 1 ? '0' : '1'; ?>">
+                          <button type="submit" class="btn btn-sm <?php echo (int)($c['is_active'] ?? 1) === 1 ? 'btn-outline-warning' : 'btn-outline-primary'; ?>">
+                            <?php echo (int)($c['is_active'] ?? 1) === 1 ? 'Khóa' : 'Mở khóa'; ?>
+                          </button>
                         </form>
                         <form method="POST" class="d-inline" onsubmit="return confirm('Xóa khách hàng nay?');">
                           <input type="hidden" name="action" value="delete_customer">

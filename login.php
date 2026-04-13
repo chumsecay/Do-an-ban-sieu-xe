@@ -7,6 +7,11 @@ require_once __DIR__ . '/config/database.php';
 
 ensureSessionStarted();
 
+if ((string)($_GET['tab'] ?? '') === 'register') {
+    header('Location: register.php');
+    exit;
+}
+
 function fetchJsonFromUrl(string $url): ?array
 {
     if (function_exists('curl_init')) {
@@ -64,7 +69,6 @@ function verifyGoogleIdToken(string $idToken, string $expectedClientId): ?array
     if ($aud !== $expectedClientId) {
         return null;
     }
-
     if ($email === '' || $emailVerified !== 'true') {
         return null;
     }
@@ -77,41 +81,100 @@ function verifyGoogleIdToken(string $idToken, string $expectedClientId): ?array
     ];
 }
 
-function ensureCustomerBalanceColumn(PDO $pdo): void
+function ensureCustomerSchema(PDO $pdo): void
 {
-    $check = $pdo->query("SHOW COLUMNS FROM customers LIKE 'balance'");
-    if (!$check->fetch()) {
+    $checkBalance = $pdo->query("SHOW COLUMNS FROM customers LIKE 'balance'");
+    if (!$checkBalance->fetch()) {
         $pdo->exec("ALTER TABLE customers ADD COLUMN balance DECIMAL(15,2) NOT NULL DEFAULT 0.00 AFTER tier");
     }
+
+    $checkPassword = $pdo->query("SHOW COLUMNS FROM customers LIKE 'password_hash'");
+    if (!$checkPassword->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN password_hash VARCHAR(255) NULL AFTER email");
+    }
+
+    $checkActive = $pdo->query("SHOW COLUMNS FROM customers LIKE 'is_active'");
+    if (!$checkActive->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER balance");
+    }
+
+    $checkLastLogin = $pdo->query("SHOW COLUMNS FROM customers LIKE 'last_login_at'");
+    if (!$checkLastLogin->fetch()) {
+        $pdo->exec("ALTER TABLE customers ADD COLUMN last_login_at DATETIME NULL AFTER is_active");
+    }
+}
+
+function findCustomerByEmail(PDO $pdo, string $email): ?array
+{
+    ensureCustomerSchema($pdo);
+
+    $stmt = $pdo->prepare('SELECT id, full_name, email, phone, balance, password_hash, is_active FROM customers WHERE LOWER(email) = LOWER(?) LIMIT 1');
+    $stmt->execute([$email]);
+    $row = $stmt->fetch();
+    return $row ?: null;
 }
 
 function findOrCreateCustomerByEmail(PDO $pdo, string $email, string $fullName): array
 {
-    ensureCustomerBalanceColumn($pdo);
-
-    $find = $pdo->prepare('SELECT id, full_name, email, balance FROM customers WHERE LOWER(email) = LOWER(?) LIMIT 1');
-    $find->execute([$email]);
-    $customer = $find->fetch();
-    if ($customer) {
-        return $customer;
+    $existing = findCustomerByEmail($pdo, $email);
+    if ($existing) {
+        return $existing;
     }
 
-    $insert = $pdo->prepare('INSERT INTO customers (full_name, email, tier, balance) VALUES (?, ?, ?, 0)');
+    $insert = $pdo->prepare('INSERT INTO customers (full_name, email, tier, balance, is_active) VALUES (?, ?, ?, 0, 1)');
     $insert->execute([$fullName, $email, 'new']);
 
-    $newId = (int)$pdo->lastInsertId();
     return [
-        'id' => $newId,
+        'id' => (int)$pdo->lastInsertId(),
         'full_name' => $fullName,
         'email' => $email,
+        'phone' => null,
         'balance' => 0,
+        'password_hash' => null,
+        'is_active' => 1,
     ];
+}
+
+function loginCustomer(PDO $pdo, array $customer, string $provider = 'password'): void
+{
+    loginAsUser([
+        'id' => (int)$customer['id'],
+        'full_name' => (string)$customer['full_name'],
+        'email' => (string)$customer['email'],
+        'balance' => (float)($customer['balance'] ?? 0),
+    ], null, $provider);
+
+    try {
+        $update = $pdo->prepare('UPDATE customers SET last_login_at = NOW() WHERE id = ?');
+        $update->execute([(int)$customer['id']]);
+    } catch (Throwable $ignored) {
+    }
+}
+
+function passwordMatchedWithLegacy(string $inputPassword, string $storedPassword, bool &$needsUpgrade): bool
+{
+    $needsUpgrade = false;
+
+    if ($storedPassword === '') {
+        return false;
+    }
+
+    if (password_verify($inputPassword, $storedPassword)) {
+        return true;
+    }
+
+    if ((password_get_info($storedPassword)['algo'] ?? 0) === 0 && hash_equals($storedPassword, $inputPassword)) {
+        $needsUpgrade = true;
+        return true;
+    }
+
+    return false;
 }
 
 $appName = env('APP_NAME', 'FLCar');
 $googleClientId = trim((string)env('GOOGLE_CLIENT_ID', ''));
 $error = '';
-$submittedUsername = '';
+$submittedLoginId = '';
 
 if (isUserLoggedIn()) {
     if (isAdminLoggedIn()) {
@@ -127,117 +190,144 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $pdo = getDBConnection();
+        ensureCustomerSchema($pdo);
 
-        if ($action === 'password_login') {
-            $submittedUsername = trim((string)($_POST['username'] ?? ''));
-            $password = (string)($_POST['password'] ?? '');
-
-            if ($submittedUsername === '' || $password === '') {
-                $error = 'Vui lòng nhập đầy đủ tài khoản và mật khẩu.';
-            } else {
-                $stmt = $pdo->prepare(
-                    'SELECT id, username, email, password_hash, full_name, role, is_active
-                     FROM admins
-                     WHERE username = ?
-                     LIMIT 1'
-                );
-                $stmt->execute([$submittedUsername]);
-                $admin = $stmt->fetch();
-
-                $storedPassword = (string)($admin['password_hash'] ?? '');
-                $passwordMatched = false;
-                $upgradeToHash = false;
-
-                if ($admin && $storedPassword !== '') {
-                    if (password_verify($password, $storedPassword)) {
-                        $passwordMatched = true;
-                    } elseif ((password_get_info($storedPassword)['algo'] ?? 0) === 0 && hash_equals($storedPassword, $password)) {
-                        // Legacy plaintext rows are accepted once and upgraded to a hash.
-                        $passwordMatched = true;
-                        $upgradeToHash = true;
-                    }
-                }
-
-                if ($passwordMatched) {
-                    if ((int)$admin['is_active'] !== 1) {
-                        $error = 'Tài khoản admin đang bị khóa.';
-                    } else {
-                        if ($upgradeToHash || password_needs_rehash($storedPassword, PASSWORD_DEFAULT)) {
-                            try {
-                                $rehash = $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?');
-                                $rehash->execute([password_hash($password, PASSWORD_DEFAULT), (int)$admin['id']]);
-                            } catch (Throwable $ignored) {
-                            }
-                        }
-
-                        loginAsAdmin($admin);
-                        try {
-                            $update = $pdo->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?');
-                            $update->execute([(int)$admin['id']]);
-                        } catch (Throwable $ignored) {
-                        }
-
-                        header('Location: admin/index.php?login=success');
-                        exit;
-                    }
-                } else {
-                    $error = 'Tài khoản hoặc mật khẩu không chính xác.';
-                }
-            }
-        } elseif ($action === 'google_login') {
+        if ($action === 'google_login') {
             $credential = trim((string)($_POST['credential'] ?? ''));
 
             if ($googleClientId === '') {
-                $error = 'Đăng nhập Google chưa được cấu hình. Vui lòng thêm GOOGLE_CLIENT_ID vào file .env.';
+                $error = 'Google login chua duoc cau hinh. Them GOOGLE_CLIENT_ID trong file .env.';
             } elseif ($credential === '') {
-                $error = 'Không nhận được token đăng nhập Google.';
+                $error = 'Khong nhan duoc token dang nhap Google.';
             } else {
                 $profile = verifyGoogleIdToken($credential, $googleClientId);
-
                 if (!is_array($profile)) {
-                    $error = 'Xác thực Google thất bại. Vui lòng thử lại.';
+                    $error = 'Xac thuc Google that bai. Vui long thu lai.';
                 } else {
-                    $stmt = $pdo->prepare(
+                    $adminStmt = $pdo->prepare(
                         'SELECT id, username, email, password_hash, full_name, role, is_active
                          FROM admins
                          WHERE LOWER(email) = LOWER(?)
                          LIMIT 1'
                     );
-                    $stmt->execute([$profile['email']]);
-                    $adminByEmail = $stmt->fetch();
+                    $adminStmt->execute([(string)$profile['email']]);
+                    $admin = $adminStmt->fetch();
 
-                    if ($adminByEmail && (int)$adminByEmail['is_active'] === 1) {
-                        loginAsAdmin($adminByEmail);
-                        try {
-                            $update = $pdo->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?');
-                            $update->execute([(int)$adminByEmail['id']]);
-                        } catch (Throwable $ignored) {
+                    if ($admin) {
+                        if ((int)$admin['is_active'] !== 1) {
+                            $error = 'Tai khoan dang bi khoa.';
+                        } else {
+                            loginAsAdmin($admin);
+                            try {
+                                $update = $pdo->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?');
+                                $update->execute([(int)$admin['id']]);
+                            } catch (Throwable $ignored) {
+                            }
+
+                            header('Location: admin/index.php?login=success');
+                            exit;
                         }
-
-                        header('Location: admin/index.php?login=success');
-                        exit;
-                    }
-
-                    if ($adminByEmail && (int)$adminByEmail['is_active'] !== 1) {
-                        $error = 'Tài khoản admin liên kết email Google đang bị khóa.';
                     } else {
                         $customer = findOrCreateCustomerByEmail($pdo, (string)$profile['email'], (string)$profile['name']);
-                        loginAsUser([
-                            'id' => (int)$customer['id'],
-                            'full_name' => (string)$customer['full_name'],
-                            'email' => (string)$customer['email'],
-                            'balance' => (float)($customer['balance'] ?? 0),
-                        ], null, 'google');
-                        header('Location: index.php?login=success');
-                        exit;
+                        if ((int)($customer['is_active'] ?? 1) !== 1) {
+                            $error = 'Tai khoan dang bi khoa.';
+                        } else {
+                            loginCustomer($pdo, $customer, 'google');
+                            header('Location: index.php?login=success');
+                            exit;
+                        }
                     }
                 }
             }
+        } elseif ($action === 'password_login') {
+            $submittedLoginId = trim((string)($_POST['login_id'] ?? ''));
+            $password = (string)($_POST['password'] ?? '');
+
+            if ($submittedLoginId === '' || $password === '') {
+                $error = 'Vui long nhap day du tai khoan va mat khau.';
+            } else {
+                $adminStmt = $pdo->prepare(
+                    'SELECT id, username, email, password_hash, full_name, role, is_active
+                     FROM admins
+                     WHERE username = ? OR LOWER(email) = LOWER(?)
+                     LIMIT 1'
+                );
+                $adminStmt->execute([$submittedLoginId, $submittedLoginId]);
+                $admin = $adminStmt->fetch();
+
+                $adminPasswordMatched = false;
+                if ($admin) {
+                    $adminStored = (string)($admin['password_hash'] ?? '');
+                    $adminNeedsUpgrade = false;
+                    $adminPasswordMatched = passwordMatchedWithLegacy($password, $adminStored, $adminNeedsUpgrade);
+
+                    if ($adminPasswordMatched) {
+                        if ((int)$admin['is_active'] !== 1) {
+                            $error = 'Tai khoan dang bi khoa.';
+                        } else {
+                            if ($adminNeedsUpgrade || password_needs_rehash($adminStored, PASSWORD_DEFAULT)) {
+                                try {
+                                    $rehash = $pdo->prepare('UPDATE admins SET password_hash = ? WHERE id = ?');
+                                    $rehash->execute([password_hash($password, PASSWORD_DEFAULT), (int)$admin['id']]);
+                                } catch (Throwable $ignored) {
+                                }
+                            }
+
+                            loginAsAdmin($admin);
+                            try {
+                                $update = $pdo->prepare('UPDATE admins SET last_login_at = NOW() WHERE id = ?');
+                                $update->execute([(int)$admin['id']]);
+                            } catch (Throwable $ignored) {
+                            }
+
+                            header('Location: admin/index.php?login=success');
+                            exit;
+                        }
+                    }
+                }
+
+                if ($error === '' && filter_var($submittedLoginId, FILTER_VALIDATE_EMAIL)) {
+                    $customerEmail = strtolower($submittedLoginId);
+                    $customer = findCustomerByEmail($pdo, $customerEmail);
+
+                    if ($customer) {
+                        if ((int)($customer['is_active'] ?? 1) !== 1) {
+                            $error = 'Tai khoan dang bi khoa.';
+                        } else {
+                            $customerStored = (string)($customer['password_hash'] ?? '');
+                            if ($customerStored === '') {
+                                $error = 'Tai khoan nay chua dat mat khau. Vui long dang ky.';
+                            } else {
+                                $customerNeedsUpgrade = false;
+                                $customerPasswordMatched = passwordMatchedWithLegacy($password, $customerStored, $customerNeedsUpgrade);
+
+                                if ($customerPasswordMatched) {
+                                    if ($customerNeedsUpgrade || password_needs_rehash($customerStored, PASSWORD_DEFAULT)) {
+                                        try {
+                                            $rehash = $pdo->prepare('UPDATE customers SET password_hash = ? WHERE id = ?');
+                                            $rehash->execute([password_hash($password, PASSWORD_DEFAULT), (int)$customer['id']]);
+                                        } catch (Throwable $ignored) {
+                                        }
+                                    }
+
+                                    loginCustomer($pdo, $customer, 'password');
+                                    header('Location: index.php?login=success');
+                                    exit;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ($error === '') {
+                    $error = 'Tai khoan hoac mat khau khong chinh xac.';
+                }
+            }
         } else {
-            $error = 'Yêu cầu đăng nhập không hợp lệ.';
+            $error = 'Yeu cau dang nhap khong hop le.';
         }
     } catch (Throwable $e) {
-        $error = 'Không thể kết nối CSDL để đăng nhập. Vui lòng thử lại.';
+        $error = 'Khong the ket noi CSDL de dang nhap. Vui long thu lai.';
     }
 }
 ?>
@@ -246,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Đăng Nhập - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
+<title>Dang Nhap - <?php echo htmlspecialchars($appName, ENT_QUOTES, 'UTF-8'); ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" href="img/logo.png" type="image/png">
@@ -289,25 +379,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     color: #fff;
     box-shadow: none;
   }
-  .form-control::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-  }
+  .form-control::placeholder { color: rgba(255, 255, 255, 0.4); }
   .btn-login {
     background: linear-gradient(to right, #3b82f6, #6366f1);
-    color: white;
+    color: #fff;
     border: none;
     padding: 14px;
     border-radius: 12px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    transition: all 0.3s;
   }
-  .btn-login:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(59, 130, 246, 0.4);
-    color: white;
-  }
+  .btn-login:hover { color:#fff; filter: brightness(1.05); }
   .btn-show-pass {
     border-color: rgba(255, 255, 255, 0.2);
     color: #e2e8f0;
@@ -330,7 +413,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   .divider {
     position: relative;
     text-align: center;
-    margin: 18px 0 16px;
+    margin: 16px 0 14px;
     font-size: 12px;
     color: rgba(255,255,255,.55);
     text-transform: uppercase;
@@ -347,11 +430,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   .divider::before { left: 0; }
   .divider::after { right: 0; }
-  .g-holder {
-    display: flex;
-    justify-content: center;
-    min-height: 44px;
-  }
+  .g-holder { display:flex; justify-content:center; min-height:44px; }
 </style>
 </head>
 <body>
@@ -359,8 +438,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <div class="d-flex justify-content-center">
     <div class="login-card text-center">
       <img src="img/logo.png" alt="FLCar" class="login-logo">
-      <h3 class="fw-bold mb-1">Đăng Nhập</h3>
-      <p class="text-white-50 mb-4" style="font-size: 0.9rem;">Admin đăng nhập bằng tài khoản nội bộ. Người dùng có thể đăng nhập bằng Google.</p>
+      <h3 class="fw-bold mb-1">Dang Nhap</h3>
+      <p class="text-white-50 mb-4" style="font-size: 0.9rem;">Dang nhap 1 form chung. He thong tu xac dinh quyen admin/khach hang theo tai khoan.</p>
 
       <?php if ($error !== ''): ?>
         <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; font-size: 0.9rem; padding: 10px; border-radius: 8px;">
@@ -370,24 +449,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <form method="POST" action="login.php" novalidate>
         <input type="hidden" name="action" value="password_login">
-
         <div class="mb-3 text-start">
-          <label class="form-label text-white-50 small fw-bold mb-1">Tài khoản admin</label>
-          <input type="text" name="username" class="form-control" placeholder="Nhập tên đăng nhập admin" value="<?php echo htmlspecialchars($submittedUsername, ENT_QUOTES, 'UTF-8'); ?>" required>
+          <label class="form-label text-white-50 small fw-bold mb-1">Tai khoan / Email</label>
+          <input type="text" name="login_id" class="form-control" placeholder="Nhap username admin hoac email"
+                 value="<?php echo htmlspecialchars($submittedLoginId, ENT_QUOTES, 'UTF-8'); ?>" required>
         </div>
 
         <div class="mb-3 text-start">
-          <label class="form-label text-white-50 small fw-bold mb-1">Mật khẩu</label>
+          <label class="form-label text-white-50 small fw-bold mb-1">Mat khau</label>
           <div class="input-group">
-            <input type="password" id="passwordInput" name="password" class="form-control" placeholder="Nhập mật khẩu" required>
-            <button type="button" id="togglePasswordBtn" class="btn btn-show-pass">Hiện</button>
+            <input type="password" id="passwordInput" name="password" class="form-control" placeholder="Nhap mat khau" required>
+            <button type="button" id="togglePasswordBtn" class="btn btn-show-pass">Hien</button>
           </div>
         </div>
 
-        <button type="submit" class="btn btn-login w-100">Đăng Nhập Admin</button>
+        <button type="submit" class="btn btn-login w-100">Dang Nhap</button>
       </form>
 
-      <div class="divider">hoặc</div>
+      <div class="divider">hoac</div>
 
       <?php if ($googleClientId !== ''): ?>
         <div id="g_id_onload"
@@ -411,12 +490,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
       <?php else: ?>
         <div class="alert alert-warning mb-0" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; font-size: 0.85rem;">
-          Google login chưa được cấu hình. Thêm <code>GOOGLE_CLIENT_ID</code> trong file <code>.env</code>.
+          Google login chua duoc cau hinh. Them <code>GOOGLE_CLIENT_ID</code> trong file <code>.env</code>.
         </div>
       <?php endif; ?>
 
-      <div class="text-white-50 mt-4" style="font-size: 0.82rem;">
-        <a href="index.php" class="text-white-50 text-decoration-none">&larr; Về trang chủ</a>
+      <div class="text-white-50 mt-4" style="font-size: 0.86rem;">
+        Chua co tai khoan? <a href="register.php" class="text-white text-decoration-none fw-semibold">Dang ky ngay</a>
+      </div>
+
+      <div class="text-white-50 mt-3" style="font-size: 0.82rem;">
+        <a href="index.php" class="text-white-50 text-decoration-none">&larr; Ve trang chu</a>
       </div>
     </div>
   </div>
@@ -428,12 +511,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <script>
 function handleGoogleCredentialResponse(response) {
   if (!response || !response.credential) {
-    alert('Không nhận được thông tin từ Google.');
+    alert('Khong nhan duoc thong tin tu Google.');
     return;
   }
 
   const credentialInput = document.getElementById('googleCredentialInput');
   const googleForm = document.getElementById('googleLoginForm');
+  if (!credentialInput || !googleForm) {
+    return;
+  }
+
   credentialInput.value = response.credential;
   googleForm.submit();
 }
@@ -451,7 +538,7 @@ function handleGoogleCredentialResponse(response) {
   toggleBtn.addEventListener('click', function () {
     const showing = passwordInput.type === 'text';
     passwordInput.type = showing ? 'password' : 'text';
-    toggleBtn.textContent = showing ? 'Hiện' : 'Ẩn';
+    toggleBtn.textContent = showing ? 'Hien' : 'An';
   });
 })();
 </script>

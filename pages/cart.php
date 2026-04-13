@@ -79,7 +79,13 @@ if ($action !== '') {
 
     if ($action === 'checkout') {
         $paymentMethod = (string)($_POST['payment_method'] ?? 'cod');
-        $result = shopCheckoutCart($pdo, $paymentMethod);
+        $shippingInput = [
+            'full_name' => trim((string)($_POST['shipping_full_name'] ?? '')),
+            'phone' => trim((string)($_POST['shipping_phone'] ?? '')),
+            'address' => trim((string)($_POST['shipping_address'] ?? '')),
+            'note' => trim((string)($_POST['shipping_note'] ?? '')),
+        ];
+        $result = shopCheckoutCart($pdo, $paymentMethod, $shippingInput);
         if (!$result['ok']) {
             redirectCart((string)($result['code'] ?? 'db_error'));
         }
@@ -95,6 +101,8 @@ $subtotal = (float)$cartData['subtotal'];
 $totalQty = (int)$cartData['total_qty'];
 $cartHasIssue = (bool)$cartData['has_issue'];
 $userBalance = (float)($_SESSION['user_balance'] ?? 0);
+$defaultShippingName = trim((string)($customer['full_name'] ?? ($_SESSION['user_name'] ?? '')));
+$defaultShippingPhone = trim((string)($customer['phone'] ?? ''));
 
 $alertMap = [
     'added' => ['success', 'Đã thêm sản phẩm vào giỏ hàng.'],
@@ -109,6 +117,12 @@ $alertMap = [
     'insufficient_balance' => ['danger', 'Số dư không đủ để thanh toán bằng ví.'],
     'stock_changed' => ['danger', 'Tồn kho đã thay đổi, vui lòng kiểm tra lại giỏ hàng.'],
     'customer_missing' => ['danger', 'Không tìm thấy hồ sơ khách hàng để tạo đơn hàng.'],
+    'shipping_name_required' => ['danger', 'Vui long nhap ten nguoi nhan.'],
+    'shipping_phone_required' => ['danger', 'Vui long nhap so dien thoai nguoi nhan.'],
+    'shipping_phone_invalid' => ['danger', 'So dien thoai nguoi nhan khong hop le.'],
+    'shipping_address_required' => ['danger', 'Vui long nhap dia chi giao xe.'],
+    'shipping_address_too_long' => ['danger', 'Dia chi giao xe qua dai (toi da 255 ky tu).'],
+    'shipping_note_too_long' => ['danger', 'Ghi chu giao hang qua dai (toi da 255 ky tu).'],
     'db_error' => ['danger', 'Có lỗi CSDL khi xử lý giỏ hàng.'],
 ];
 ?>
@@ -248,6 +262,26 @@ $alertMap = [
             <hr>
             <form method="POST" class="d-grid gap-3">
               <input type="hidden" name="action" value="checkout">
+              <div>
+                <label class="form-label small fw-bold text-secondary">Nguoi nhan</label>
+                <input type="text" name="shipping_full_name" class="form-control bg-light border-0" required
+                       value="<?php echo htmlspecialchars($defaultShippingName, ENT_QUOTES, 'UTF-8'); ?>">
+              </div>
+              <div>
+                <label class="form-label small fw-bold text-secondary">So dien thoai nhan hang</label>
+                <input type="text" name="shipping_phone" class="form-control bg-light border-0" required
+                       value="<?php echo htmlspecialchars($defaultShippingPhone, ENT_QUOTES, 'UTF-8'); ?>">
+              </div>
+              <div>
+                <label class="form-label small fw-bold text-secondary">Dia chi giao xe</label>
+                <input type="text" name="shipping_address" class="form-control bg-light border-0" required
+                       placeholder="So nha, duong, phuong/xa, quan/huyen, tinh/thanh">
+              </div>
+              <div>
+                <label class="form-label small fw-bold text-secondary">Ghi chu giao hang</label>
+                <textarea name="shipping_note" class="form-control bg-light border-0" rows="2" maxlength="255"
+                          placeholder="Thoi gian mong muon, ghi chu them (khong bat buoc)"></textarea>
+              </div>
               <div>
                 <label class="form-label small fw-bold text-secondary">Phương thức thanh toán</label>
                 <select name="payment_method" class="form-select bg-light border-0">

@@ -15,6 +15,7 @@ $adminUrl = $base . 'admin/index.php';
 $accountUrl = $pageBase . 'account.php';
 $cartUrl = $pageBase . 'cart.php';
 $ordersUrl = $pageBase . 'orders.php';
+$supportUrl = $pageBase . 'support.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE && !headers_sent()) {
     ensureSessionStarted();
@@ -105,6 +106,7 @@ if ($avatarLetter === '') {
               <a class="nav-account-item" href="<?php echo $accountUrl; ?>">Tài khoản của tôi</a>
               <a class="nav-account-item" href="<?php echo $cartUrl; ?>">Giỏ hàng<?php echo $cartCount > 0 ? ' (' . (int)$cartCount . ')' : ''; ?></a>
               <a class="nav-account-item" href="<?php echo $ordersUrl; ?>">Đơn mua</a>
+              <a class="nav-account-item" href="<?php echo $supportUrl; ?>">Hỗ trợ</a>
               <?php if ($isAdmin): ?>
                 <a class="nav-account-item nav-account-item-admin" href="<?php echo $adminUrl; ?>">Quản trị</a>
               <?php endif; ?>
